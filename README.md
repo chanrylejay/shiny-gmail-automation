@@ -16,25 +16,6 @@ No need to manually clean your inbox every day.
 
 </div>
 
----
-
-## 📖 Table of Contents
-
-- [What It Does](#-what-it-does)
-- [Who This Is For](#-who-this-is-for)
-- [The Simple Version](#-the-simple-version)
-- [Gmail Labels Used](#️-gmail-labels-used)
-- [Telegram Commands](#-telegram-commands)
-- [Safety & Privacy](#-safety--privacy)
-- [How It Works](#-how-it-works)
-- [What You Need Before Setup](#-what-you-need-before-setup)
-- [Quick Start](#-quick-start)
-- [First Test](#-first-test)
-- [Design Philosophy](#-design-philosophy)
-- [Tech Stack](#️-tech-stack)
-- [Project Stats](#-project-stats)
-- [FAQ](#-faq)
-- [License](#-license)
 
 ---
 
