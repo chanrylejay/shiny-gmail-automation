@@ -1,0 +1,650 @@
+{
+  "name": "Shiny Gmail Single Email Processor Child V2.6 Lean",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "b01",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -2200,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Purpose: Validate one-email payload from the Daily Orchestrator.\n// V2.6: 'sender' removed from required fields to prevent permanent failure loops on malformed From headers.\nconst item = $input.first()?.json || {};\nconst required = ['account','messageId','subject','labelMap','processedLabelId'];\nconst missing = required.filter(k => item[k] === undefined || item[k] === null || item[k] === '');\nif (missing.length) {\n  return [{ json: { status: 'failed', messageId: item.messageId || null, category: item.category || null, source: item.source || 'input_validation', reasoning: null, confidence: 0, errorMessage: `Missing required child fields: ${missing.join(', ')}`, ledgerWarning: false } }];\n}\nreturn [{ json: { ...item, childStatus: 'started', childExecutionId: String($execution.id) } }];"
+      },
+      "id": "b02",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1980,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "equals",
+              "value2": "failed"
+            }
+          ]
+        }
+      },
+      "id": "b03",
+      "name": "Input Failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1760,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT gmail_message_id, status, category, source, confidence, reasoning, processed_at\nFROM gmail_message_ledger\nWHERE account = $1\n  AND gmail_message_id = $2\n  AND status = 'completed'\nLIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ [$json.account, $json.messageId] }}",
+          "connectionTimeout": 10,
+          "delayClosingIdleConnection": 5
+        }
+      },
+      "id": "b04",
+      "name": "Check Ledger Completed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1540,
+        -300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CREDENTIAL_ID",
+          "name": "Neon Postgres"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Purpose: Use the ledger only as a hint. If lookup fails, keep processing.\nconst original = $('Validate Input').first()?.json || {};\nconst row = $input.first()?.json || {};\nif (row.error) {\n  return [{ json: { ...original, ledgerCheckFailed: true, failureStage: 'ledger_check', errorMessage: row.error?.message || 'Ledger check failed.' } }];\n}\nconst ledgerCompleted = Boolean(row.gmail_message_id && row.status === 'completed');\nreturn [{ json: { ...original, ledgerCompleted, ledgerCategory: row.category || null, ledgerSource: row.source || null, ledgerConfidence: row.confidence ?? null, ledgerReasoning: row.reasoning || null, ledgerProcessedAt: row.processed_at || null } }];"
+      },
+      "id": "b05",
+      "name": "Evaluate Ledger Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1320,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.ledgerCompleted }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "b06",
+      "name": "Ledger Completed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1100,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.requiresGemini }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "b07",
+      "name": "Needs Gemini?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -880,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $env.GEMINI_MODEL || 'gemini-2.0-flash' }}:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-goog-api-key",
+              "value": "={{ $env.GEMINI_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ role: 'user', parts: [{ text: `You are Shiny Gmail Automation, a strict inbox classifier.\\\\n\\\\nCategories:\\\\n1. unimportant = spam, newsletters, promotions, marketing, sales, coupons, generic automated clutter.\\\\n2. receipts = purchase receipts, order confirmations, payment confirmations, invoices, shipping/delivery notices, billing confirmations.\\\\n3. important = personal messages, work emails, bank/financial alerts, security alerts, OTP, 2FA, password resets, government, legal, medical, school, insurance.\\\\n4. email-subs = services/platforms the user actively subscribed to and may want to manage/cancel. Not newsletters/promos.\\\\n5. please-review = low-confidence or ambiguous emails.\\\\n\\\\nRules:\\\\n- If confidence is below 0.8, return please-review.\\\\n- Reasoning must be one short sentence.\\\\n\\\\nEmail JSON:\\\\n${JSON.stringify({ messageId: $json.messageId, threadId: $json.threadId, sender: $json.sender, from: $json.fromRaw, subject: String($json.subject || '').slice(0, 200), date: $json.date, snippet: String($json.snippet || '').slice(0, 300) })}` }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 256, responseMimeType: 'application/json', responseSchema: { type: 'OBJECT', properties: { messageId: { type: 'STRING' }, category: { type: 'STRING', enum: ['unimportant','receipts','important','email-subs','please-review'] }, confidence: { type: 'NUMBER' }, reasoning: { type: 'STRING' } }, required: ['messageId','category','confidence','reasoning'] } } }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "b08",
+      "name": "Gemini Classify Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -660,
+        -300
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Purpose: Handle Gemini API response - parse success or fallback on failure.\n// V2.6: Sanitized reasoning - fixed safe string, raw error in errorMessage only.\nconst original = $('Evaluate Ledger Check').first()?.json || {};\n\n// Check if Gemini API call failed (error output from Gemini node)\nif ($json.error) {\n  const msg = String($json.error?.message || $json.message || 'Gemini API failed.').slice(0, 500);\n  return [{ json: { ...original, category: 'please-review', source: 'ai_failed', confidence: 0, reasoning: 'Gemini API failed; safe fallback to please-review.', errorMessage: msg } }];\n}\n\n// Parse successful Gemini response\nlet rawText = '';\nlet parsed = null;\ntry {\n  rawText = $json.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  let cleaned = rawText.replace(/```json\\s*/gi, '').replace(/```/g, '').trim();\n  const open = cleaned.indexOf('{');\n  const close = cleaned.lastIndexOf('}');\n  if (open !== -1 && close > open) cleaned = cleaned.substring(open, close + 1);\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  return [{ json: { ...original, category: 'please-review', source: 'ai_failed', confidence: 0, reasoning: 'Gemini parse failed; routed to please-review.' } }];\n}\n\nconst validCategories = ['unimportant','receipts','important','email-subs','please-review'];\nlet category = String(parsed.category || '').toLowerCase().trim();\nlet confidence = Number(parsed.confidence ?? 0);\nlet reasoning = String(parsed.reasoning || 'No reasoning provided.');\n\nif (String(parsed.messageId) !== String(original.messageId)) {\n  category = 'please-review';\n  confidence = 0;\n  reasoning = 'Gemini messageId mismatch; routed to please-review.';\n}\nif (!validCategories.includes(category)) {\n  category = 'please-review';\n  confidence = 0;\n  reasoning = 'Invalid Gemini category; routed to please-review.';\n}\nif (!Number.isFinite(confidence) || confidence < 0.8) {\n  category = 'please-review';\n  reasoning = `Confidence below threshold: ${confidence}.`;\n}\n\nreturn [{ json: { ...original, category, source: 'ai', confidence, reasoning } }];"
+      },
+      "id": "b09",
+      "name": "Handle Gemini Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -440,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Purpose: Single normalization point for ALL classification paths.\n// V2.6: Absorbs ledger reuse, processedLabelId guard with explicit failure shape, labelMap graceful routing.\nconst j = $json;\nconst validCategories = ['unimportant','receipts','important','email-subs','please-review'];\n\n// Ledger reuse path - if ledger already completed, use its classification\nlet category, source, confidence, reasoning;\nif (j.ledgerCompleted && j.ledgerCategory) {\n  category = String(j.ledgerCategory).toLowerCase().trim();\n  source = j.ledgerSource || 'ledger';\n  confidence = j.ledgerConfidence ?? 1;\n  reasoning = j.ledgerReasoning || 'Reused ledger classification. Gmail processed label was missing, so labels will be reapplied.';\n} else {\n  category = String(j.category || 'please-review').toLowerCase().trim();\n  source = j.source || 'unknown';\n  confidence = j.confidence ?? 0;\n  reasoning = j.reasoning || 'No reasoning provided.';\n}\n\n// Validate category\nif (!validCategories.includes(category)) {\n  category = 'please-review';\n  reasoning = `${reasoning} Invalid category normalized to please-review.`;\n}\n\n// Resolve target label ID\nlet targetLabelId = j.labelMap?.[category];\n\n// Graceful routing - if target label missing but please-review exists, route there\nif (!targetLabelId && j.labelMap?.['please-review']) {\n  category = 'please-review';\n  targetLabelId = j.labelMap['please-review'];\n  reasoning = `${reasoning} Missing target category label; routed to please-review.`;\n}\n\n// Guard against empty processedLabelId\nif (!j.processedLabelId) {\n  return [{\n    json: {\n      ...j,\n      category,\n      targetLabelId: null,\n      labelReady: false,\n      status: 'failed',\n      failedAt: 'missing_processed_label_id',\n      source,\n      confidence,\n      reasoning: `${reasoning} processedLabelId is missing; cannot mark as processed.`\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    ...j,\n    category,\n    targetLabelId,\n    labelReady: Boolean(targetLabelId),\n    source,\n    confidence,\n    reasoning\n  }\n}];"
+      },
+      "id": "b10",
+      "name": "Prepare Final Category",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.labelReady }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "b11",
+      "name": "Label Ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        60,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "addLabels",
+        "messageId": "={{ $json.messageId }}",
+        "labelIds": "={{ [$json.targetLabelId] }}"
+      },
+      "id": "b12",
+      "name": "Apply Category Label",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        280,
+        -320
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail OAuth2"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "addLabels",
+        "messageId": "={{ $('Prepare Final Category').first().json.messageId }}",
+        "labelIds": "={{ [$('Prepare Final Category').first().json.processedLabelId] }}"
+      },
+      "id": "b13",
+      "name": "Apply Processed Label",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        500,
+        -320
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail OAuth2"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO gmail_message_ledger (\n  account,\n  gmail_message_id,\n  thread_id,\n  sender,\n  subject,\n  category,\n  source,\n  confidence,\n  reasoning,\n  status,\n  error_message,\n  processed_at,\n  created_at,\n  updated_at\n)\nVALUES ($1,$2,$3,$4,$5,$6,$7,$8::numeric,$9,'completed',NULL,now(),now(),now())\nON CONFLICT (account, gmail_message_id)\nDO UPDATE SET\n  thread_id = EXCLUDED.thread_id,\n  sender = EXCLUDED.sender,\n  subject = EXCLUDED.subject,\n  category = EXCLUDED.category,\n  source = EXCLUDED.source,\n  confidence = EXCLUDED.confidence,\n  reasoning = EXCLUDED.reasoning,\n  status = 'completed',\n  error_message = NULL,\n  processed_at = now(),\n  updated_at = now()\nRETURNING account, gmail_message_id, status, category, source;",
+        "options": {
+          "queryReplacement": "={{ [$('Prepare Final Category').first().json.account, $('Prepare Final Category').first().json.messageId, $('Prepare Final Category').first().json.threadId || '', $('Prepare Final Category').first().json.sender || '', $('Prepare Final Category').first().json.subject || '(no subject)', $('Prepare Final Category').first().json.category || 'please-review', $('Prepare Final Category').first().json.source || 'unknown', $('Prepare Final Category').first().json.confidence ?? 0, $('Prepare Final Category').first().json.reasoning || 'No reasoning provided.'] }}",
+          "connectionTimeout": 10,
+          "delayClosingIdleConnection": 5
+        }
+      },
+      "id": "b14",
+      "name": "Upsert Ledger Completed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        720,
+        -320
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CREDENTIAL_ID",
+          "name": "Neon Postgres"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Purpose: Return minimal success result to orchestrator.\n// V2.6: Stripped to only the 8 fields the orchestrator needs.\nconst original = $('Prepare Final Category').first()?.json || {};\nconst db = $input.first()?.json || {};\nconst ledgerWarning = Boolean(db.error);\nreturn [{ json: {\n  status: 'completed',\n  messageId: original.messageId || null,\n  category: db.category || original.category || null,\n  source: db.source || original.source || null,\n  confidence: original.confidence ?? 0,\n  reasoning: original.reasoning || null,\n  errorMessage: ledgerWarning ? `Gmail processed; ledger update failed: ${db.error?.message || 'unknown ledger error'}` : null,\n  ledgerWarning\n} }];"
+      },
+      "id": "b15",
+      "name": "Return Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Purpose: Build failure context for emails that could not be fully processed.\n// V2.6: Inverted stage detection — checks Apply Processed Label (not Apply Category Label).\nfunction safeNode(name) { try { return $(name).first()?.json || null; } catch (e) { return null; } }\nconst prepared = safeNode('Prepare Final Category') || safeNode('Evaluate Ledger Check') || safeNode('Validate Input') || $json || {};\nconst current = $json || {};\nconst err = current.error?.message || current.message || current.errorMessage || null;\nlet failureStage = 'processing';\nif (prepared.labelReady === false) failureStage = 'missing_label_id';\nelse if (safeNode('Apply Processed Label')) failureStage = 'apply_processed_label';\nelse failureStage = 'apply_category_label';\nconst errorMessage = prepared.labelReady === false ? `Missing Gmail label ID for category: ${prepared.category || 'unknown'}` : (err || `Failed during ${failureStage}.`);\nreturn [{ json: { ...prepared, status: 'failed', failureStage, errorMessage } }];"
+      },
+      "id": "b16",
+      "name": "Build Processing Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO gmail_message_ledger (\n  account,\n  gmail_message_id,\n  thread_id,\n  sender,\n  subject,\n  category,\n  source,\n  confidence,\n  reasoning,\n  status,\n  error_message,\n  processed_at,\n  created_at,\n  updated_at\n)\nVALUES ($1,$2,$3,$4,$5,$6,$7,$8::numeric,$9,'failed',$10,NULL,now(),now())\nON CONFLICT (account, gmail_message_id)\nDO UPDATE SET\n  thread_id = EXCLUDED.thread_id,\n  sender = EXCLUDED.sender,\n  subject = EXCLUDED.subject,\n  category = EXCLUDED.category,\n  source = EXCLUDED.source,\n  confidence = EXCLUDED.confidence,\n  reasoning = EXCLUDED.reasoning,\n  status = 'failed',\n  error_message = EXCLUDED.error_message,\n  updated_at = now()\nRETURNING account, gmail_message_id, status, error_message;",
+        "options": {
+          "queryReplacement": "={{ [$json.account || 'primary', $json.messageId || 'unknown', $json.threadId || '', $json.sender || '', $json.subject || '(no subject)', $json.category || null, $json.source || 'unknown', $json.confidence ?? 0, $json.reasoning || null, $json.errorMessage || 'Processing failed.'] }}",
+          "connectionTimeout": 10,
+          "delayClosingIdleConnection": 5
+        }
+      },
+      "id": "b17",
+      "name": "Upsert Ledger Failed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        500,
+        -40
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CREDENTIAL_ID",
+          "name": "Neon Postgres"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Purpose: Return minimal failure result to orchestrator.\n// V2.6: Stripped to only the 8 fields the orchestrator needs.\nfunction safeNode(name) { try { return $(name).first()?.json || null; } catch (e) { return null; } }\nconst failure = safeNode('Build Processing Failure') || $json || {};\nreturn [{ json: {\n  status: 'failed',\n  messageId: failure.messageId || null,\n  category: failure.category || null,\n  source: failure.source || 'unknown',\n  confidence: failure.confidence ?? 0,\n  reasoning: failure.reasoning || null,\n  errorMessage: failure.errorMessage || $json.error_message || $json.error?.message || 'Processing failed.',\n  ledgerWarning: false\n} }];"
+      },
+      "id": "b18",
+      "name": "Return Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "content": "🏷️ **Label Ordering Rule (V2.6)**\n\n1. Apply CATEGORY label first\n2. Apply PROCESSED label second\n3. Upsert ledger completed last\n\nNever reverse this order.\nCategory failure → no processed → no ledger complete.\nGmail processed label = visible commit point.\n\nV2.6: Restore nodes removed; downstream uses $('Prepare Final Category') refs.\nFailure stage detection inverted for correct attribution.",
+        "width": 400,
+        "height": 300
+      },
+      "id": "s-b01",
+      "name": "Note: Label Order",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        60,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "content": "🤖 **Gemini Fallback Rules (V2.6)**\n\n• API failure → please-review (sanitized reasoning)\n• Parse failure → please-review\n• messageId mismatch → please-review\n• Confidence < 0.8 → please-review\n• Invalid category → please-review\n\nNo email is ever silently lost.\nV2.6: Raw error text kept in errorMessage only, not persisted in reasoning.",
+        "width": 380,
+        "height": 280
+      },
+      "id": "s-b02",
+      "name": "Note: Gemini Fallback",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -660,
+        -620
+      ]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Input Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input Failed?": {
+      "main": [
+        [
+          {
+            "node": "Return Failure",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Ledger Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Ledger Completed": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Ledger Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Evaluate Ledger Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Ledger Check": {
+      "main": [
+        [
+          {
+            "node": "Ledger Completed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ledger Completed?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Needs Gemini?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Gemini?": {
+      "main": [
+        [
+          {
+            "node": "Gemini Classify Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Final Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Classify Email": {
+      "main": [
+        [
+          {
+            "node": "Handle Gemini Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Gemini Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Gemini Response": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Final Category": {
+      "main": [
+        [
+          {
+            "node": "Label Ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Label Ready?": {
+      "main": [
+        [
+          {
+            "node": "Apply Category Label",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Processing Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Category Label": {
+      "main": [
+        [
+          {
+            "node": "Apply Processed Label",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Processing Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Processed Label": {
+      "main": [
+        [
+          {
+            "node": "Upsert Ledger Completed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Processing Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Ledger Completed": {
+      "main": [
+        [
+          {
+            "node": "Return Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Processing Failure": {
+      "main": [
+        [
+          {
+            "node": "Upsert Ledger Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Ledger Failed": {
+      "main": [
+        [
+          {
+            "node": "Return Failure",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Manila",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 300,
+    "errorWorkflow": "REPLACE_WITH_SUPERVISOR_WORKFLOW_ID"
+  },
+  "pinData": {},
+  "staticData": null,
+  "tags": [
+    {
+      "name": "gmail"
+    },
+    {
+      "name": "shiny-gmail-automation"
+    },
+    {
+      "name": "single-email-processor"
+    },
+    {
+      "name": "v2.6-lean"
+    }
+  ]
+}
