@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS gmail_message_ledger (
     subject             TEXT,
 
     -- Classification result
-    -- Categories: unimportant, receipts, important, email-subs, please-review
+    -- Categories: unimportant, receipts, priority, email-subs, please-review
     category            TEXT,
 
     -- Classification source
@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS gmail_message_ledger (
 
 COMMENT ON TABLE gmail_message_ledger IS 'Audit/idempotency helper for processed emails. Gmail processed label is the true source of truth.';
 COMMENT ON COLUMN gmail_message_ledger.gmail_message_id IS 'Gmail API message ID (e.g., "18f1a2b3c4d5e6f7").';
-COMMENT ON COLUMN gmail_message_ledger.category IS 'Classification: unimportant, receipts, important, email-subs, please-review.';
+COMMENT ON COLUMN gmail_message_ledger.category IS 'Classification: unimportant, receipts, priority, email-subs, please-review.';
 COMMENT ON COLUMN gmail_message_ledger.source IS 'How classification was determined: ai, whitelist, blacklist, domain_whitelist, etc.';
 COMMENT ON COLUMN gmail_message_ledger.status IS 'Processing status: completed (labels applied), failed (error occurred), pending (not yet processed).';
 
@@ -162,7 +162,7 @@ CREATE TABLE IF NOT EXISTS gmail_sender_rules (
     match_type          TEXT            NOT NULL DEFAULT 'exact_sender',
 
     -- Rule type determines the category:
-    --   whitelist     -> important
+    --   whitelist     -> priority
     --   blacklist     -> unimportant
     --   force_receipts -> receipts
     --   force_review  -> please-review
@@ -189,7 +189,7 @@ CREATE TABLE IF NOT EXISTS gmail_sender_rules (
 COMMENT ON TABLE gmail_sender_rules IS 'Sender/domain classification rules managed via Telegram for Shiny Gmail Automation V2.6 Lean.';
 COMMENT ON COLUMN gmail_sender_rules.sender_pattern IS 'Email address (for exact_sender) or domain name (for domain match type).';
 COMMENT ON COLUMN gmail_sender_rules.match_type IS 'exact_sender = full email match; domain = domain + subdomain match.';
-COMMENT ON COLUMN gmail_sender_rules.rule_type IS 'whitelist->important, blacklist->unimportant, force_receipts->receipts, force_review->please-review.';
+COMMENT ON COLUMN gmail_sender_rules.rule_type IS 'whitelist->priority, blacklist->unimportant, force_receipts->receipts, force_review->please-review.';
 COMMENT ON COLUMN gmail_sender_rules.priority IS 'Lower = higher priority. Default: 10 (sender), 20 (domain).';
 
 

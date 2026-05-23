@@ -3,19 +3,14 @@
   "nodes": [
     {
       "parameters": {
-        "updates": [
-          "message"
-        ],
+        "updates": ["message"],
         "additionalFields": {}
       },
       "id": "c01",
       "name": "Telegram Rules Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
       "typeVersion": 1.2,
-      "position": [
-        -1800,
-        0
-      ],
+      "position": [-1800, 0],
       "credentials": {
         "telegramApi": {
           "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
@@ -25,16 +20,13 @@
     },
     {
       "parameters": {
-        "jsCode": "// Purpose: Lightweight personal Telegram rules manager for Shiny Gmail.\n// V2.6: Added /unreceipt, /unreview. Dynamic help text for domain vs sender commands.\nconst update = $input.first()?.json || {};\nconst message = update.message || update;\nconst chat = message.chat || {};\nconst from = message.from || {};\nconst account = $env.GMAIL_ACCOUNT || 'primary';\nconst allowedChatId = String($env.TELEGRAM_CHAT_ID || '');\nconst chatId = String(chat.id || message.chat_id || '');\nconst chatType = String(chat.type || 'private');\nconst allowGroups = String($env.TELEGRAM_ALLOW_GROUP_RULES || 'false') === 'true';\nconst telegramUserId = String(from.id || '');\nconst telegramUsername = from.username || '';\nconst text = String(message.text || '').trim();\nfunction out(extra) { return [{ json: { account, chatId, chatType, telegramUserId, telegramUsername, rawText: text, ...extra } }]; }\nif (!allowedChatId) return out({ allowed: false, action: 'reply', replyText: '\\ud83d\\udea8 TELEGRAM_CHAT_ID is missing. Rules Manager is locked.' });\nif (chatId !== allowedChatId) return out({ allowed: false, action: 'reply', replyText: '\\u26d4 Unauthorized.' });\nif (chatType !== 'private' && !allowGroups) return out({ allowed: false, action: 'reply', replyText: '\\u26d4 Rules Manager only accepts private chat commands.' });\nif (!text) return out({ allowed: true, action: 'reply', replyText: 'Send /help for commands.' });\nconst parts = text.split(/\\s+/);\nconst command = String(parts[0] || '').toLowerCase();\nconst value = String(parts[1] || '').toLowerCase().trim();\nconst validEmail = /^[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}$/i;\nconst validDomain = /^[a-z0-9.-]+\\.[a-z]{2,}$/i;\nconst helpText = '\\ud83d\\udccb Shiny Gmail Rules Manager V2.6 Lean\\n\\n' +\n  '<b>Exact sender rules</b>\\n' +\n  '/whitelist email@example.com \\u2192 important\\n' +\n  '/blacklist email@example.com \\u2192 unimportant\\n' +\n  '/receipt email@example.com \\u2192 receipts\\n' +\n  '/review email@example.com \\u2192 please-review\\n\\n' +\n  '<b>Disable exact sender rules</b>\\n' +\n  '/unwhitelist email@example.com\\n' +\n  '/unblacklist email@example.com\\n' +\n  '/unreceipt email@example.com\\n' +\n  '/unreview email@example.com\\n\\n' +\n  '<b>Domain rules</b>\\n' +\n  '/whitelistdomain example.com \\u2192 important\\n' +\n  '/blacklistdomain example.com \\u2192 unimportant\\n' +\n  '/unwhitelistdomain example.com\\n' +\n  '/unblacklistdomain example.com\\n\\n' +\n  '<b>View</b>\\n/rules';\nif (command === '/help' || command === '/start') return out({ allowed: true, action: 'help', replyText: helpText });\nif (command === '/rules') return out({ allowed: true, action: 'list' });\nconst upsertMap = {\n  '/whitelist': { ruleType: 'whitelist', matchType: 'exact_sender', priority: 10 },\n  '/blacklist': { ruleType: 'blacklist', matchType: 'exact_sender', priority: 10 },\n  '/receipt': { ruleType: 'force_receipts', matchType: 'exact_sender', priority: 10 },\n  '/review': { ruleType: 'force_review', matchType: 'exact_sender', priority: 10 },\n  '/whitelistdomain': { ruleType: 'whitelist', matchType: 'domain', priority: 20 },\n  '/blacklistdomain': { ruleType: 'blacklist', matchType: 'domain', priority: 20 }\n};\nconst disableMap = {\n  '/unwhitelist': { ruleType: 'whitelist', matchType: 'exact_sender' },\n  '/unblacklist': { ruleType: 'blacklist', matchType: 'exact_sender' },\n  '/unreceipt': { ruleType: 'force_receipts', matchType: 'exact_sender' },\n  '/unreview': { ruleType: 'force_review', matchType: 'exact_sender' },\n  '/unwhitelistdomain': { ruleType: 'whitelist', matchType: 'domain' },\n  '/unblacklistdomain': { ruleType: 'blacklist', matchType: 'domain' }\n};\nif (upsertMap[command]) {\n  const mapped = upsertMap[command];\n  const example = mapped.matchType === 'domain' ? 'example.com' : 'email@example.com';\n  if (!value) return out({ allowed: true, action: 'reply', replyText: `Missing value. Example: ${command} ${example}` });\n  if (mapped.matchType === 'exact_sender' && !validEmail.test(value)) return out({ allowed: true, action: 'reply', replyText: 'Invalid email format.' });\n  if (mapped.matchType === 'domain' && !validDomain.test(value.replace(/^@/, ''))) return out({ allowed: true, action: 'reply', replyText: 'Invalid domain format.' });\n  return out({ allowed: true, action: 'upsert', senderPattern: mapped.matchType === 'domain' ? value.replace(/^@/, '') : value, matchType: mapped.matchType, ruleType: mapped.ruleType, priority: mapped.priority, notes: `Telegram command ${command}` });\n}\nif (disableMap[command]) {\n  const mapped = disableMap[command];\n  const example = mapped.matchType === 'domain' ? 'example.com' : 'email@example.com';\n  if (!value) return out({ allowed: true, action: 'reply', replyText: `Missing value. Example: ${command} ${example}` });\n  if (mapped.matchType === 'exact_sender' && !validEmail.test(value)) return out({ allowed: true, action: 'reply', replyText: 'Invalid email format.' });\n  if (mapped.matchType === 'domain' && !validDomain.test(value.replace(/^@/, ''))) return out({ allowed: true, action: 'reply', replyText: 'Invalid domain format.' });\n  return out({ allowed: true, action: 'disable', senderPattern: mapped.matchType === 'domain' ? value.replace(/^@/, '') : value, matchType: mapped.matchType, ruleType: mapped.ruleType });\n}\nreturn out({ allowed: true, action: 'reply', replyText: 'Unknown command. Send /help.' });"
+        "jsCode": "// Purpose: Lightweight personal Telegram rules manager for Shiny Gmail.\n// V2.6: Added /unreceipt, /unreview. Dynamic help text for domain vs sender commands.\nconst update = $input.first()?.json || {};\nconst message = update.message || update;\nconst chat = message.chat || {};\nconst from = message.from || {};\nconst account = $env.GMAIL_ACCOUNT || 'primary';\nconst allowedChatId = String($env.TELEGRAM_CHAT_ID || '');\nconst chatId = String(chat.id || message.chat_id || '');\nconst chatType = String(chat.type || 'private');\nconst allowGroups = String($env.TELEGRAM_ALLOW_GROUP_RULES || 'false') === 'true';\nconst telegramUserId = String(from.id || '');\nconst telegramUsername = from.username || '';\nconst text = String(message.text || '').trim();\nfunction out(extra) { return [{ json: { account, chatId, chatType, telegramUserId, telegramUsername, rawText: text, ...extra } }]; }\nif (!allowedChatId) return out({ allowed: false, action: 'reply', replyText: '\\ud83d\\udea8 TELEGRAM_CHAT_ID is missing. Rules Manager is locked.' });\nif (chatId !== allowedChatId) return out({ allowed: false, action: 'reply', replyText: '\\u26d4 Unauthorized.' });\nif (chatType !== 'private' && !allowGroups) return out({ allowed: false, action: 'reply', replyText: '\\u26d4 Rules Manager only accepts private chat commands.' });\nif (!text) return out({ allowed: true, action: 'reply', replyText: 'Send /help for commands.' });\nconst parts = text.split(/\\s+/);\nconst command = String(parts[0] || '').toLowerCase();\nconst value = String(parts[1] || '').toLowerCase().trim();\nconst validEmail = /^[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}$/i;\nconst validDomain = /^[a-z0-9.-]+\\.[a-z]{2,}$/i;\nconst helpText = '\\ud83d\\udccb Shiny Gmail Rules Manager V2.6 Lean\\n\\n' +\n  '<b>Exact sender rules</b>\\n' +\n  '/whitelist email@example.com \\u2192 priority\\n' +\n  '/blacklist email@example.com \\u2192 unimportant\\n' +\n  '/receipt email@example.com \\u2192 receipts\\n' +\n  '/review email@example.com \\u2192 please-review\\n\\n' +\n  '<b>Disable exact sender rules</b>\\n' +\n  '/unwhitelist email@example.com\\n' +\n  '/unblacklist email@example.com\\n' +\n  '/unreceipt email@example.com\\n' +\n  '/unreview email@example.com\\n\\n' +\n  '<b>Domain rules</b>\\n' +\n  '/whitelistdomain example.com \\u2192 priority\\n' +\n  '/blacklistdomain example.com \\u2192 unimportant\\n' +\n  '/unwhitelistdomain example.com\\n' +\n  '/unblacklistdomain example.com\\n\\n' +\n  '<b>View</b>\\n/rules';\nif (command === '/help' || command === '/start') return out({ allowed: true, action: 'help', replyText: helpText });\nif (command === '/rules') return out({ allowed: true, action: 'list' });\nconst upsertMap = {\n  '/whitelist': { ruleType: 'whitelist', matchType: 'exact_sender', priority: 10 },\n  '/blacklist': { ruleType: 'blacklist', matchType: 'exact_sender', priority: 10 },\n  '/receipt': { ruleType: 'force_receipts', matchType: 'exact_sender', priority: 10 },\n  '/review': { ruleType: 'force_review', matchType: 'exact_sender', priority: 10 },\n  '/whitelistdomain': { ruleType: 'whitelist', matchType: 'domain', priority: 20 },\n  '/blacklistdomain': { ruleType: 'blacklist', matchType: 'domain', priority: 20 }\n};\nconst disableMap = {\n  '/unwhitelist': { ruleType: 'whitelist', matchType: 'exact_sender' },\n  '/unblacklist': { ruleType: 'blacklist', matchType: 'exact_sender' },\n  '/unreceipt': { ruleType: 'force_receipts', matchType: 'exact_sender' },\n  '/unreview': { ruleType: 'force_review', matchType: 'exact_sender' },\n  '/unwhitelistdomain': { ruleType: 'whitelist', matchType: 'domain' },\n  '/unblacklistdomain': { ruleType: 'blacklist', matchType: 'domain' }\n};\nif (upsertMap[command]) {\n  const mapped = upsertMap[command];\n  const example = mapped.matchType === 'domain' ? 'example.com' : 'email@example.com';\n  if (!value) return out({ allowed: true, action: 'reply', replyText: `Missing value. Example: ${command} ${example}` });\n  if (mapped.matchType === 'exact_sender' && !validEmail.test(value)) return out({ allowed: true, action: 'reply', replyText: 'Invalid email format.' });\n  if (mapped.matchType === 'domain' && !validDomain.test(value.replace(/^@/, ''))) return out({ allowed: true, action: 'reply', replyText: 'Invalid domain format.' });\n  return out({ allowed: true, action: 'upsert', senderPattern: mapped.matchType === 'domain' ? value.replace(/^@/, '') : value, matchType: mapped.matchType, ruleType: mapped.ruleType, priority: mapped.priority, notes: `Telegram command ${command}` });\n}\nif (disableMap[command]) {\n  const mapped = disableMap[command];\n  const example = mapped.matchType === 'domain' ? 'example.com' : 'email@example.com';\n  if (!value) return out({ allowed: true, action: 'reply', replyText: `Missing value. Example: ${command} ${example}` });\n  if (mapped.matchType === 'exact_sender' && !validEmail.test(value)) return out({ allowed: true, action: 'reply', replyText: 'Invalid email format.' });\n  if (mapped.matchType === 'domain' && !validDomain.test(value.replace(/^@/, ''))) return out({ allowed: true, action: 'reply', replyText: 'Invalid domain format.' });\n  return out({ allowed: true, action: 'disable', senderPattern: mapped.matchType === 'domain' ? value.replace(/^@/, '') : value, matchType: mapped.matchType, ruleType: mapped.ruleType });\n}\nreturn out({ allowed: true, action: 'reply', replyText: 'Unknown command. Send /help.' });"
       },
       "id": "c02",
       "name": "Parse And Authorize Command",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        -1580,
-        0
-      ]
+      "position": [-1580, 0]
     },
     {
       "parameters": {
@@ -114,10 +106,7 @@
       "name": "Route Command",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
-      "position": [
-        -1360,
-        0
-      ]
+      "position": [-1360, 0]
     },
     {
       "parameters": {
@@ -127,10 +116,7 @@
       "name": "Format Simple Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        -1140,
-        -200
-      ]
+      "position": [-1140, -200]
     },
     {
       "parameters": {
@@ -146,10 +132,7 @@
       "name": "List Sender Rules",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        -1140,
-        -40
-      ],
+      "position": [-1140, -40],
       "credentials": {
         "postgres": {
           "id": "REPLACE_WITH_POSTGRES_CREDENTIAL_ID",
@@ -161,16 +144,13 @@
     },
     {
       "parameters": {
-        "jsCode": "function h(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction tg(s) { s = String(s ?? ''); return s.length <= 3900 ? s : s.slice(0, 3900) + '\\n\\n[...truncated]'; }\nconst cmd = $('Parse And Authorize Command').first()?.json || {};\nconst first = $input.first()?.json || {};\nif (first.error) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '⚠️ Failed to load rules.' } }];\nconst rows = $input.all().map(i => i.json || {}).filter(r => r.sender_pattern);\nif (!rows.length) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '📋 <b>Your Gmail Rules</b>\\n\\nNo active rules yet.' } }];\nconst groups = { whitelist: [], blacklist: [], force_receipts: [], force_review: [] };\nfor (const r of rows) {\n  const line = `• ${h(r.sender_pattern)} <i>(${h(r.match_type)})</i>`;\n  if (!groups[r.rule_type]) groups[r.rule_type] = [];\n  groups[r.rule_type].push(line);\n}\nconst text = `📋 <b>Your Gmail Rules</b>\\n\\n` +\n  `<b>Whitelist → important</b>\\n${groups.whitelist.length ? groups.whitelist.join('\\n') : 'None'}\\n\\n` +\n  `<b>Blacklist → unimportant</b>\\n${groups.blacklist.length ? groups.blacklist.join('\\n') : 'None'}\\n\\n` +\n  `<b>Receipts</b>\\n${groups.force_receipts.length ? groups.force_receipts.join('\\n') : 'None'}\\n\\n` +\n  `<b>Please-review</b>\\n${groups.force_review.length ? groups.force_review.join('\\n') : 'None'}`;\nreturn [{ json: { chatId: cmd.chatId, account: cmd.account, text: tg(text) } }];"
+        "jsCode": "function h(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction tg(s) { s = String(s ?? ''); return s.length <= 3900 ? s : s.slice(0, 3900) + '\\n\\n[...truncated]'; }\nconst cmd = $('Parse And Authorize Command').first()?.json || {};\nconst first = $input.first()?.json || {};\nif (first.error) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '⚠️ Failed to load rules.' } }];\nconst rows = $input.all().map(i => i.json || {}).filter(r => r.sender_pattern);\nif (!rows.length) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '📋 <b>Your Gmail Rules</b>\\n\\nNo active rules yet.' } }];\nconst groups = { whitelist: [], blacklist: [], force_receipts: [], force_review: [] };\nfor (const r of rows) {\n  const line = `• ${h(r.sender_pattern)} <i>(${h(r.match_type)})</i>`;\n  if (!groups[r.rule_type]) groups[r.rule_type] = [];\n  groups[r.rule_type].push(line);\n}\nconst text = `📋 <b>Your Gmail Rules</b>\\n\\n` +\n  `<b>Whitelist → priority</b>\\n${groups.whitelist.length ? groups.whitelist.join('\\n') : 'None'}\\n\\n` +\n  `<b>Blacklist → unimportant</b>\\n${groups.blacklist.length ? groups.blacklist.join('\\n') : 'None'}\\n\\n` +\n  `<b>Receipts</b>\\n${groups.force_receipts.length ? groups.force_receipts.join('\\n') : 'None'}\\n\\n` +\n  `<b>Please-review</b>\\n${groups.force_review.length ? groups.force_review.join('\\n') : 'None'}`;\nreturn [{ json: { chatId: cmd.chatId, account: cmd.account, text: tg(text) } }];"
       },
       "id": "c06",
       "name": "Format Rules List",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        -920,
-        -40
-      ]
+      "position": [-920, -40]
     },
     {
       "parameters": {
@@ -186,10 +166,7 @@
       "name": "Upsert Sender Rule",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        -1140,
-        140
-      ],
+      "position": [-1140, 140],
       "credentials": {
         "postgres": {
           "id": "REPLACE_WITH_POSTGRES_CREDENTIAL_ID",
@@ -200,16 +177,13 @@
     },
     {
       "parameters": {
-        "jsCode": "function h(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction tg(s) { s = String(s ?? ''); return s.length <= 3900 ? s : s.slice(0, 3900) + '\\n\\n[...truncated]'; }\nconst cmd = $('Parse And Authorize Command').first()?.json || {};\nconst row = $input.first()?.json || {};\nif (row.error) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '⚠️ Failed to save rule.' } }];\nconst category = row.rule_type === 'whitelist' ? 'important' : row.rule_type === 'blacklist' ? 'unimportant' : row.rule_type === 'force_receipts' ? 'receipts' : 'please-review';\nconst text = `✅ <b>Rule saved</b>\\n\\nPattern: ${h(row.sender_pattern)}\\nMatch: ${h(row.match_type)}\\nRule: ${h(row.rule_type)}\\nFuture category: ${h(category)}`;\nreturn [{ json: { chatId: cmd.chatId, account: cmd.account, text: tg(text) } }];"
+        "jsCode": "function h(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction tg(s) { s = String(s ?? ''); return s.length <= 3900 ? s : s.slice(0, 3900) + '\\n\\n[...truncated]'; }\nconst cmd = $('Parse And Authorize Command').first()?.json || {};\nconst row = $input.first()?.json || {};\nif (row.error) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '⚠️ Failed to save rule.' } }];\nconst category = row.rule_type === 'whitelist' ? 'priority' : row.rule_type === 'blacklist' ? 'unimportant' : row.rule_type === 'force_receipts' ? 'receipts' : 'please-review';\nconst text = `✅ <b>Rule saved</b>\\n\\nPattern: ${h(row.sender_pattern)}\\nMatch: ${h(row.match_type)}\\nRule: ${h(row.rule_type)}\\nFuture category: ${h(category)}`;\nreturn [{ json: { chatId: cmd.chatId, account: cmd.account, text: tg(text) } }];"
       },
       "id": "c08",
       "name": "Format Upsert Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        -920,
-        140
-      ]
+      "position": [-920, 140]
     },
     {
       "parameters": {
@@ -225,10 +199,7 @@
       "name": "Disable Sender Rule",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        -1140,
-        320
-      ],
+      "position": [-1140, 320],
       "credentials": {
         "postgres": {
           "id": "REPLACE_WITH_POSTGRES_CREDENTIAL_ID",
@@ -246,10 +217,7 @@
       "name": "Format Disable Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        -920,
-        320
-      ]
+      "position": [-920, 320]
     },
     {
       "parameters": {
@@ -263,10 +231,7 @@
       "name": "Send Telegram Reply",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [
-        -540,
-        120
-      ],
+      "position": [-540, 120],
       "credentials": {
         "telegramApi": {
           "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
@@ -288,14 +253,11 @@
       "name": "Note: Auth Model",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [
-        -1800,
-        -300
-      ]
+      "position": [-1800, -300]
     },
     {
       "parameters": {
-        "content": "📋 **Rule Mapping (V2.6)**\n\nwhitelist → important\nblacklist → unimportant\nreceipt / force_receipts → receipts\nreview / force_review → please-review\n\nMatch types: exact_sender, domain\n\nV2.6: Added /unreceipt and /unreview.\nDynamic help text shows correct example per command type.",
+        "content": "📋 **Rule Mapping (V2.6)**\n\nwhitelist → priority\nblacklist → unimportant\nreceipt / force_receipts → receipts\nreview / force_review → please-review\n\nMatch types: exact_sender, domain\n\nV2.6: Added /unreceipt and /unreview.\nDynamic help text shows correct example per command type.",
         "width": 360,
         "height": 260
       },
@@ -303,10 +265,7 @@
       "name": "Note: Rule Mapping",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [
-        -1360,
-        -300
-      ]
+      "position": [-1360, -300]
     }
   ],
   "connections": {
@@ -470,10 +429,7 @@
       ]
     },
     "Send Telegram Reply": {
-      "main": [
-        [],
-        []
-      ]
+      "main": [[], []]
     }
   },
   "settings": {

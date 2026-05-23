@@ -17,23 +17,17 @@
       "name": "Daily Schedule",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [
-        -2820,
-        -100
-      ]
+      "position": [-2820, -100]
     },
     {
       "parameters": {
-        "jsCode": "// Purpose: Build the daily run context and validate required environment variables.\nconst crypto = require('crypto');\n\nconst account = $env.GMAIL_ACCOUNT || 'primary';\nconst runId = crypto.randomUUID();\nconst runDate = new Date().toISOString().slice(0, 10);\nconst executionId = String($execution.id);\nconst workflowName = 'Shiny Gmail Daily Orchestrator V2.6 Lean';\n\nconst required = ['GMAIL_ACCOUNT', 'GEMINI_API_KEY', 'TELEGRAM_CHAT_ID'];\nconst missing = required.filter(k => !$env[k]);\n\nreturn [{\n  json: {\n    account,\n    runId,\n    runDate,\n    executionId,\n    workflowName,\n    envOk: missing.length === 0,\n    missingEnv: missing,\n    runStatus: missing.length > 0 ? 'failed' : 'running',\n    failureStage: missing.length > 0 ? 'env_validation' : null,\n    errorMessage: missing.length > 0 ? `Missing required env vars: ${missing.join(', ')}` : null,\n    requiredLabels: ['unimportant','receipts','important','email-subs','please-review','processed'],\n    startedAt: new Date().toISOString(),\n    runStarted: false\n  }\n}];"
+        "jsCode": "// Purpose: Build the daily run context and validate required environment variables.\nconst crypto = require('crypto');\n\nconst account = $env.GMAIL_ACCOUNT || 'primary';\nconst runId = crypto.randomUUID();\nconst runDate = new Date().toISOString().slice(0, 10);\nconst executionId = String($execution.id);\nconst workflowName = 'Shiny Gmail Daily Orchestrator V2.6 Lean';\n\nconst required = ['GMAIL_ACCOUNT', 'GEMINI_API_KEY', 'TELEGRAM_CHAT_ID'];\nconst missing = required.filter(k => !$env[k]);\n\nreturn [{\n  json: {\n    account,\n    runId,\n    runDate,\n    executionId,\n    workflowName,\n    envOk: missing.length === 0,\n    missingEnv: missing,\n    runStatus: missing.length > 0 ? 'failed' : 'running',\n    failureStage: missing.length > 0 ? 'env_validation' : null,\n    errorMessage: missing.length > 0 ? `Missing required env vars: ${missing.join(', ')}` : null,\n    requiredLabels: ['unimportant','receipts','priority','email-subs','please-review','processed'],\n    startedAt: new Date().toISOString(),\n    runStarted: false\n  }\n}];"
       },
       "id": "a02",
       "name": "Build Context And Validate Env",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        -2600,
-        -100
-      ]
+      "position": [-2600, -100]
     },
     {
       "parameters": {
@@ -50,10 +44,7 @@
       "name": "Env OK?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [
-        -2380,
-        -100
-      ]
+      "position": [-2380, -100]
     },
     {
       "parameters": {
@@ -69,10 +60,7 @@
       "name": "Simple Run Guard Query",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        -2160,
-        -220
-      ],
+      "position": [-2160, -220],
       "credentials": {
         "postgres": {
           "id": "REPLACE_WITH_POSTGRES_CREDENTIAL_ID",
@@ -90,10 +78,7 @@
       "name": "Evaluate Run Guard",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        -1940,
-        -220
-      ]
+      "position": [-1940, -220]
     },
     {
       "parameters": {
@@ -110,10 +95,7 @@
       "name": "Active Run?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [
-        -1720,
-        -220
-      ]
+      "position": [-1720, -220]
     },
     {
       "parameters": {
@@ -129,10 +111,7 @@
       "name": "Mark Run Started",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        -1500,
-        -320
-      ],
+      "position": [-1500, -320],
       "credentials": {
         "postgres": {
           "id": "REPLACE_WITH_POSTGRES_CREDENTIAL_ID",
@@ -152,10 +131,7 @@
       "name": "Get Gmail Labels",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [
-        -1280,
-        -320
-      ],
+      "position": [-1280, -320],
       "credentials": {
         "gmailOAuth2": {
           "id": "REPLACE_WITH_GMAIL_CREDENTIAL_ID",
@@ -172,10 +148,7 @@
       "name": "Validate Labels And Build Map",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        -1060,
-        -320
-      ]
+      "position": [-1060, -320]
     },
     {
       "parameters": {
@@ -192,10 +165,7 @@
       "name": "Labels OK?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [
-        -840,
-        -320
-      ]
+      "position": [-840, -320]
     },
     {
       "parameters": {
@@ -211,10 +181,7 @@
       "name": "Load Sender Rules",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        -620,
-        -420
-      ],
+      "position": [-620, -420],
       "credentials": {
         "postgres": {
           "id": "REPLACE_WITH_POSTGRES_CREDENTIAL_ID",
@@ -232,10 +199,7 @@
       "name": "Pack Sender Rules",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        -400,
-        -420
-      ]
+      "position": [-400, -420]
     },
     {
       "parameters": {
@@ -253,10 +217,7 @@
       "name": "Fetch Inbox Emails",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [
-        -180,
-        -420
-      ],
+      "position": [-180, -420],
       "credentials": {
         "gmailOAuth2": {
           "id": "REPLACE_WITH_GMAIL_CREDENTIAL_ID",
@@ -268,16 +229,13 @@
     },
     {
       "parameters": {
-        "jsCode": "// Purpose: Normalize Gmail search results into one child-processing item per email.\n// V2.6: Same-run dedup by email.id + subdomain matching for domain rules.\nconst ctx = $('Pack Sender Rules').first()?.json || $('Validate Labels And Build Map').first()?.json || {};\nconst packedRules = $('Pack Sender Rules').first()?.json || {};\nconst rulesFailed = Boolean(packedRules.rulesFailed);\nconst rules = packedRules.senderRules || [];\n\nconst inboxItems = $input.all().map(i => i.json || {});\nconst inboxFailed = inboxItems.some(e => e.error);\n\nif (rulesFailed) {\n  return [{\n    json: {\n      ...ctx,\n      noWork: true,\n      runStatus: 'failed',\n      failureStage: 'sender_rules_load',\n      totalDiscovered: 0,\n      errorMessage: packedRules.rulesError || 'Failed to load sender rules.'\n    }\n  }];\n}\n\nif (inboxFailed) {\n  return [{\n    json: {\n      ...ctx,\n      noWork: true,\n      runStatus: 'failed',\n      failureStage: 'gmail_inbox_fetch',\n      totalDiscovered: 0,\n      errorMessage: inboxItems.find(e => e.error)?.error?.message || 'Failed to fetch inbox emails.'\n    }\n  }];\n}\n\nconst rawEmails = inboxItems.filter(e => e.id);\n\n// Deduplicate by email.id to prevent duplicate loop iterations\nconst seen = new Map();\nfor (const email of rawEmails) {\n  if (!seen.has(email.id)) seen.set(email.id, email);\n}\nconst uniqueEmails = Array.from(seen.values());\n\nfunction getHeader(e, k) {\n  const h = e.headers || e.payload?.headers || [];\n  const f = h.find(x => String(x.name || '').toLowerCase() === k.toLowerCase());\n  return f?.value || '';\n}\n\nfunction extractEmail(r) {\n  const s = String(r || '').toLowerCase();\n  const m = s.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}/i);\n  return m ? m[0].toLowerCase() : s.trim();\n}\n\nfunction domainOf(s) {\n  return String(s || '').split('@')[1] || '';\n}\n\nfunction matchRule(sender, rules) {\n  const domain = domainOf(sender);\n  for (const r of rules) {\n    const pattern = String(r.sender_pattern || '').toLowerCase().trim();\n    const matchType = String(r.match_type || 'exact_sender').toLowerCase();\n    if (matchType === 'exact_sender' && sender === pattern) return r;\n    const p = pattern.replace(/^@/, '');\n    if (matchType === 'domain' && (domain === p || domain.endsWith('.' + p))) return r;\n  }\n  return null;\n}\n\nfunction ruleToCategory(rule) {\n  if (!rule) return null;\n  const t = String(rule.rule_type || '').toLowerCase();\n  if (t === 'whitelist') return 'important';\n  if (t === 'blacklist') return 'unimportant';\n  if (t === 'force_receipts') return 'receipts';\n  if (t === 'force_review') return 'please-review';\n  return null;\n}\n\nfunction ruleToSource(rule) {\n  if (!rule) return 'ai';\n  const matchType = String(rule.match_type || 'exact_sender').toLowerCase();\n  const ruleType = String(rule.rule_type || '').toLowerCase();\n  if (matchType === 'domain' && ruleType === 'whitelist') return 'domain_whitelist';\n  if (matchType === 'domain' && ruleType === 'blacklist') return 'domain_blacklist';\n  return ruleType;\n}\n\nif (!uniqueEmails.length) {\n  return [{\n    json: {\n      ...ctx,\n      noWork: true,\n      runStatus: 'completed',\n      failureStage: null,\n      totalDiscovered: 0,\n      totalCompleted: 0,\n      totalFailed: 0,\n      totalSkipped: 0,\n      totalReview: 0\n    }\n  }];\n}\n\nreturn uniqueEmails.map(email => {\n  const fromRaw = email.from || getHeader(email, 'from');\n  const sender = extractEmail(fromRaw);\n  const subject = email.subject || getHeader(email, 'subject') || '(no subject)';\n  const snippet = email.snippet || '';\n  const messageId = email.id;\n  const threadId = email.threadId || '';\n  const date = email.date || getHeader(email, 'date') || '';\n  const matchedRule = matchRule(sender, rules);\n  const ruleCategory = ruleToCategory(matchedRule);\n  const requiresGemini = !ruleCategory;\n\n  return {\n    json: {\n      account: ctx.account,\n      runId: ctx.runId,\n      runDate: ctx.runDate,\n      executionId: ctx.executionId,\n      workflowName: ctx.workflowName,\n      messageId,\n      threadId,\n      sender,\n      fromRaw,\n      subject,\n      snippet,\n      date,\n      labelMap: ctx.labelMap,\n      processedLabelId: ctx.processedLabelId,\n      matchedRule: matchedRule || null,\n      category: ruleCategory || null,\n      source: ruleCategory ? ruleToSource(matchedRule) : 'ai',\n      confidence: ruleCategory ? 1 : null,\n      reasoning: ruleCategory ? `Matched sender rule: ${matchedRule.rule_type}.` : null,\n      requiresGemini,\n      noWork: false,\n      totalDiscovered: uniqueEmails.length\n    }\n  };\n});"
+        "jsCode": "// Purpose: Normalize Gmail search results into one child-processing item per email.\n// V2.6: Same-run dedup by email.id + subdomain matching for domain rules.\nconst ctx = $('Pack Sender Rules').first()?.json || $('Validate Labels And Build Map').first()?.json || {};\nconst packedRules = $('Pack Sender Rules').first()?.json || {};\nconst rulesFailed = Boolean(packedRules.rulesFailed);\nconst rules = packedRules.senderRules || [];\n\nconst inboxItems = $input.all().map(i => i.json || {});\nconst inboxFailed = inboxItems.some(e => e.error);\n\nif (rulesFailed) {\n  return [{\n    json: {\n      ...ctx,\n      noWork: true,\n      runStatus: 'failed',\n      failureStage: 'sender_rules_load',\n      totalDiscovered: 0,\n      errorMessage: packedRules.rulesError || 'Failed to load sender rules.'\n    }\n  }];\n}\n\nif (inboxFailed) {\n  return [{\n    json: {\n      ...ctx,\n      noWork: true,\n      runStatus: 'failed',\n      failureStage: 'gmail_inbox_fetch',\n      totalDiscovered: 0,\n      errorMessage: inboxItems.find(e => e.error)?.error?.message || 'Failed to fetch inbox emails.'\n    }\n  }];\n}\n\nconst rawEmails = inboxItems.filter(e => e.id);\n\n// Deduplicate by email.id to prevent duplicate loop iterations\nconst seen = new Map();\nfor (const email of rawEmails) {\n  if (!seen.has(email.id)) seen.set(email.id, email);\n}\nconst uniqueEmails = Array.from(seen.values());\n\nfunction getHeader(e, k) {\n  const h = e.headers || e.payload?.headers || [];\n  const f = h.find(x => String(x.name || '').toLowerCase() === k.toLowerCase());\n  return f?.value || '';\n}\n\nfunction extractEmail(r) {\n  const s = String(r || '').toLowerCase();\n  const m = s.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}/i);\n  return m ? m[0].toLowerCase() : s.trim();\n}\n\nfunction domainOf(s) {\n  return String(s || '').split('@')[1] || '';\n}\n\nfunction matchRule(sender, rules) {\n  const domain = domainOf(sender);\n  for (const r of rules) {\n    const pattern = String(r.sender_pattern || '').toLowerCase().trim();\n    const matchType = String(r.match_type || 'exact_sender').toLowerCase();\n    if (matchType === 'exact_sender' && sender === pattern) return r;\n    const p = pattern.replace(/^@/, '');\n    if (matchType === 'domain' && (domain === p || domain.endsWith('.' + p))) return r;\n  }\n  return null;\n}\n\nfunction ruleToCategory(rule) {\n  if (!rule) return null;\n  const t = String(rule.rule_type || '').toLowerCase();\n  if (t === 'whitelist') return 'priority';\n  if (t === 'blacklist') return 'unimportant';\n  if (t === 'force_receipts') return 'receipts';\n  if (t === 'force_review') return 'please-review';\n  return null;\n}\n\nfunction ruleToSource(rule) {\n  if (!rule) return 'ai';\n  const matchType = String(rule.match_type || 'exact_sender').toLowerCase();\n  const ruleType = String(rule.rule_type || '').toLowerCase();\n  if (matchType === 'domain' && ruleType === 'whitelist') return 'domain_whitelist';\n  if (matchType === 'domain' && ruleType === 'blacklist') return 'domain_blacklist';\n  return ruleType;\n}\n\nif (!uniqueEmails.length) {\n  return [{\n    json: {\n      ...ctx,\n      noWork: true,\n      runStatus: 'completed',\n      failureStage: null,\n      totalDiscovered: 0,\n      totalCompleted: 0,\n      totalFailed: 0,\n      totalSkipped: 0,\n      totalReview: 0\n    }\n  }];\n}\n\nreturn uniqueEmails.map(email => {\n  const fromRaw = email.from || getHeader(email, 'from');\n  const sender = extractEmail(fromRaw);\n  const subject = email.subject || getHeader(email, 'subject') || '(no subject)';\n  const snippet = email.snippet || '';\n  const messageId = email.id;\n  const threadId = email.threadId || '';\n  const date = email.date || getHeader(email, 'date') || '';\n  const matchedRule = matchRule(sender, rules);\n  const ruleCategory = ruleToCategory(matchedRule);\n  const requiresGemini = !ruleCategory;\n\n  return {\n    json: {\n      account: ctx.account,\n      runId: ctx.runId,\n      runDate: ctx.runDate,\n      executionId: ctx.executionId,\n      workflowName: ctx.workflowName,\n      messageId,\n      threadId,\n      sender,\n      fromRaw,\n      subject,\n      snippet,\n      date,\n      labelMap: ctx.labelMap,\n      processedLabelId: ctx.processedLabelId,\n      matchedRule: matchedRule || null,\n      category: ruleCategory || null,\n      source: ruleCategory ? ruleToSource(matchedRule) : 'ai',\n      confidence: ruleCategory ? 1 : null,\n      reasoning: ruleCategory ? `Matched sender rule: ${matchedRule.rule_type}.` : null,\n      requiresGemini,\n      noWork: false,\n      totalDiscovered: uniqueEmails.length\n    }\n  };\n});"
       },
       "id": "a14",
       "name": "Normalize Emails And Apply Rules",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        40,
-        -420
-      ]
+      "position": [40, -420]
     },
     {
       "parameters": {
@@ -294,10 +252,7 @@
       "name": "No Work?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [
-        260,
-        -420
-      ]
+      "position": [260, -420]
     },
     {
       "parameters": {
@@ -308,10 +263,7 @@
       "name": "Split Emails",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [
-        480,
-        -560
-      ]
+      "position": [480, -560]
     },
     {
       "parameters": {
@@ -324,10 +276,7 @@
       "name": "Call Single Email Processor",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
-      "position": [
-        700,
-        -660
-      ],
+      "position": [700, -660],
       "onError": "continueErrorOutput"
     },
     {
@@ -338,10 +287,7 @@
       "name": "Normalize Child Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        920,
-        -660
-      ]
+      "position": [920, -660]
     },
     {
       "parameters": {
@@ -352,10 +298,7 @@
       "name": "Wait Between Emails",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [
-        1140,
-        -660
-      ]
+      "position": [1140, -660]
     },
     {
       "parameters": {
@@ -365,10 +308,7 @@
       "name": "Build Final Summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        700,
-        -320
-      ]
+      "position": [700, -320]
     },
     {
       "parameters": {
@@ -378,10 +318,7 @@
       "name": "Build No Work Summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        480,
-        -180
-      ]
+      "position": [480, -180]
     },
     {
       "parameters": {
@@ -398,10 +335,7 @@
       "name": "Should Skip Mark Finished?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [
-        700,
-        -180
-      ]
+      "position": [700, -180]
     },
     {
       "parameters": {
@@ -417,10 +351,7 @@
       "name": "Mark Run Finished",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        920,
-        -320
-      ],
+      "position": [920, -320],
       "credentials": {
         "postgres": {
           "id": "REPLACE_WITH_POSTGRES_CREDENTIAL_ID",
@@ -437,10 +368,7 @@
       "name": "Format Telegram Summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1140,
-        -320
-      ]
+      "position": [1140, -320]
     },
     {
       "parameters": {
@@ -454,10 +382,7 @@
       "name": "Send Telegram Summary",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [
-        1360,
-        -320
-      ],
+      "position": [1360, -320],
       "credentials": {
         "telegramApi": {
           "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
@@ -479,10 +404,7 @@
       "name": "Note: SoT Model",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [
-        -2820,
-        -480
-      ]
+      "position": [-2820, -480]
     },
     {
       "parameters": {
@@ -494,10 +416,7 @@
       "name": "Note: Flow Overview",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [
-        -820,
-        -660
-      ]
+      "position": [-820, -660]
     }
   ],
   "connections": {

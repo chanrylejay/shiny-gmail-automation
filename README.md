@@ -27,7 +27,7 @@ Every morning, it can:
 
 - Mark newsletters and promotions as **unimportant**
 - Label order confirmations and invoices as **receipts**
-- Highlight work, banking, OTP, and urgent messages as **important**
+- Highlight work, banking, OTP, and urgent messages as **priority**
 - Set unclear messages aside as **please-review**
 - Send you a Telegram summary of what happened
 
@@ -75,9 +75,9 @@ It sees:
 Then it labels them:
 
 - Amazon → `receipts`
-- Bank alert → `important`
+- Bank alert → `priority`
 - Newsletter → `unimportant`
-- Work email → `important`
+- Work email → `priority`
 - Confusing email → `please-review`
 
 Then it sends you a Telegram message:
@@ -86,7 +86,7 @@ Then it sends you a Telegram message:
 ✅ Gmail cleanup finished
 
 5 emails processed
-⭐ 2 important
+⭐ 2 priority
 🧾 1 receipt
 📋 1 unimportant
 👀 1 needs review
@@ -102,7 +102,7 @@ Shiny Gmail uses six Gmail labels.
 
 | Label | Meaning |
 |---|---|
-| `important` | Emails you probably care about |
+| `priority` | Emails you probably care about |
 | `receipts` | Orders, invoices, deliveries, payments, and money records |
 | `email-subs` | Services you intentionally signed up for |
 | `unimportant` | Newsletters, marketing, spam-like messages, or low-priority mail |
@@ -124,7 +124,7 @@ Just message your Telegram bot.
 
 ### Examples
 
-Always mark this sender as important:
+Always mark this sender as priority:
 
 ```text
 /whitelist boss@company.com
@@ -229,7 +229,7 @@ For example:
 /whitelist boss@company.com
 ```
 
-means emails from that sender are treated as important even if AI would have guessed something else.
+means emails from that sender are treated as priority even if AI would have guessed something else.
 
 ### If AI is unsure, the email goes to review
 
@@ -319,7 +319,7 @@ For full setup instructions, read the [Deployment Guide](docs/deployment-guide.m
 In Gmail, create these labels:
 
 ```text
-important
+priority
 receipts
 email-subs
 unimportant
