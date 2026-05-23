@@ -16,7 +16,6 @@ No need to manually clean your inbox every day.
 
 </div>
 
-
 ---
 
 ## 🤔 What It Does
@@ -83,7 +82,7 @@ Then it labels them:
 Then it sends you a Telegram message:
 
 ```text
-✅ Gmail cleanup finished
+🧹 Shiny Gmail Daily Run
 
 5 emails processed
 ⭐ 2 priority
@@ -113,6 +112,9 @@ The most important idea:
 
 > `please-review` is the safety net.
 > If the system is unsure, it asks you instead of guessing silently.
+
+> [!WARNING]
+> Do not create a Gmail label named `important`. Gmail reserves that name as a system label. This project uses `priority` instead.
 
 ---
 
@@ -171,13 +173,13 @@ mail.spammy-site.com
 offers.spammy-site.com
 ```
 
-### Add Rules
+### Add Sender Rules
 
 ```text
-/whitelist email@example.com
-/blacklist email@example.com
-/receipt email@example.com
-/review email@example.com
+/whitelist mail@example.com
+/blacklist mail@example.com
+/receipt mail@example.com
+/review mail@example.com
 ```
 
 ### Add Domain Rules
@@ -190,10 +192,10 @@ offers.spammy-site.com
 ### Remove Rules
 
 ```text
-/unwhitelist email@example.com
-/unblacklist email@example.com
-/unreceipt email@example.com
-/unreview email@example.com
+/unwhitelist mail@example.com
+/unblacklist mail@example.com
+/unreceipt mail@example.com
+/unreview mail@example.com
 /unwhitelistdomain example.com
 /unblacklistdomain example.com
 ```
@@ -290,29 +292,23 @@ The system is made of three n8n workflows:
 You will need accounts or access for:
 
 - Gmail
-- n8n
+- n8n (self-hosted)
 - Telegram
-- Google AI Studio or Gemini API
+- Google AI Studio (Gemini API)
 - Neon Postgres or another Postgres database
-
-Recommended tools:
-
-- Latest stable n8n version
-- Gmail API access through Google Cloud
-- A Telegram bot created with BotFather
-- A Gemini model suitable for structured JSON classification
-- A Postgres database for rules and audit history
+- ngrok or another HTTPS tunnel (for Telegram webhooks)
 
 > [!NOTE]
-> Gemini model availability changes over time. If Gemini 2.0 Flash is not available to your project, use Gemini 2.5 Flash, Gemini 2.5 Flash-Lite, or a newer compatible Gemini Flash model.
+> Telegram webhooks require HTTPS. If you run n8n locally on `http://localhost`, you need an HTTPS tunnel like ngrok (free tier is enough).
+
+> [!NOTE]
+> Gemini model availability and free tier quotas vary by region and account. If one model returns 429 errors, try a different model. See the [Deployment Guide](docs/deployment-guide.md#troubleshooting) for details.
 
 ---
 
 ## 🚀 Quick Start
 
-This is the short version.
-
-For full setup instructions, read the [Deployment Guide](docs/deployment-guide.md).
+This is the short version. For full step-by-step instructions, read the **[Deployment Guide](docs/deployment-guide.md)**.
 
 ### Step 1 — Create Gmail Labels
 
@@ -329,72 +325,34 @@ processed
 
 ### Step 2 — Create Your Database
 
-Use the SQL file in this repo:
+Run the schema file in your Postgres database:
 
 ```text
 database/schema.sql
 ```
 
-Run it in your Postgres database.
+### Step 3 — Set Up HTTPS Tunnel
 
-### Step 3 — Prepare Your API Access
-
-You need credentials for:
-
-- Gmail
-- Telegram bot
-- Gemini API
-- Postgres database
-
-Keep these private. Do not commit secrets to GitHub.
+Set up ngrok (or another tunnel) so Telegram can reach your local n8n.
 
 ### Step 4 — Import the n8n Workflows
 
-Import the three workflow files:
+Import in this order:
 
-```text
-workflows/workflow_a_orchestrator.json
-workflows/workflow_b_email_processor.json
-workflows/workflow_c_rules_manager.json
-```
+1. Workflow B — Email Processor
+2. Workflow C — Rules Manager
+3. Workflow A — Orchestrator
 
-Recommended order:
+### Step 5 — Connect Credentials & Replace Placeholder IDs
 
-1. Import Workflow B — Email Processor
-2. Import Workflow C — Rules Manager
-3. Import Workflow A — Orchestrator
+### Step 6 — Run Smoke Tests
 
-### Step 5 — Connect Credentials
+### Step 7 — Activate Workflows
 
-Inside n8n, connect your Gmail, Telegram, Gemini, and Postgres credentials.
+For detailed instructions on every step, see the **[Deployment Guide](docs/deployment-guide.md)**.
 
-Replace placeholder IDs as described in the [Deployment Guide](docs/deployment-guide.md).
-
-### Step 6 — Activate
-
-Turn on the workflows.
-
-The system will run automatically on the next scheduled cleanup.
-
----
-
-## 🧪 First Test
-
-Before trusting it fully, do a small test.
-
-1. Send yourself a few test emails.
-2. Add one Telegram rule:
-
-```text
-/whitelist your-email@example.com
-```
-
-3. Manually run the daily workflow in n8n.
-4. Check Gmail.
-5. Confirm the correct labels were added.
-6. Check Telegram for the summary.
-
-Once the test looks good, leave it running.
+> [!IMPORTANT]
+> After importing workflows, run smoke tests before production use. n8n imports can sometimes corrupt internal wiring on multi-output nodes (IF, Switch, SplitInBatches). The [Deployment Guide](docs/deployment-guide.md#known-import-issues) explains how to detect and fix this.
 
 ---
 
@@ -415,8 +373,6 @@ So it was rebuilt with a simpler philosophy:
 
 The current version keeps the important safety ideas while removing unnecessary complexity.
 
-It went through multiple rounds of review by different AI agents to make sure it was both lean and safe before release.
-
 ---
 
 ## 🛠️ Tech Stack
@@ -430,6 +386,7 @@ It went through multiple rounds of review by different AI agents to make sure it
 | **Gemini** | Classifies emails when no personal rule exists |
 | **Telegram Bot** | Lets you manage rules from your phone |
 | **Postgres** | Stores rules and audit history |
+| **ngrok / HTTPS tunnel** | Lets Telegram reach a local self-hosted n8n instance |
 
 ---
 
@@ -442,7 +399,7 @@ It went through multiple rounds of review by different AI agents to make sure it
 | Gmail labels | 6 |
 | Telegram commands | 16 |
 | Database tables | 3 |
-| Software cost | $0 (free tier everything) |
+| Software cost | $0 (free tier) |
 | Goal | Keep personal Gmail clean with minimal effort |
 
 ---
@@ -480,8 +437,6 @@ Yes. You can manually remove labels in Gmail like any normal Gmail label.
 
 Create a Telegram rule for that sender. Your rule will override AI next time.
 
-Example:
-
 ```text
 /whitelist sender@example.com
 ```
@@ -496,11 +451,23 @@ The email is sent to `please-review` instead of being silently misclassified.
 
 ### Can I change the 6:00 AM schedule?
 
-Yes. Change the schedule in n8n.
+Yes. Change the schedule in Workflow A inside n8n.
 
 ### Does this work without Telegram?
 
 The cleanup can work without Telegram commands, but Telegram is the easiest way to manage rules and receive daily summaries.
+
+### Does my laptop need to stay on?
+
+Yes. If n8n runs locally on your laptop, it must be on and awake for the scheduled run to fire. ngrok is only a tunnel — it does not host n8n for you.
+
+### Why do I need ngrok?
+
+Telegram requires HTTPS webhook URLs. Localhost URLs are not accepted. ngrok gives you a free public HTTPS address that tunnels to your local n8n.
+
+### I'm getting errors during setup. Where do I look?
+
+See the **[Deployment Guide — Troubleshooting](docs/deployment-guide.md#troubleshooting)** section for solutions to all known issues.
 
 ### Is this beginner-friendly?
 
