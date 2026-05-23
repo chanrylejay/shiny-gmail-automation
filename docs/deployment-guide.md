@@ -114,7 +114,7 @@ Shiny Gmail uses 6 custom labels to organize your inbox. These must exist in Gma
 |---|-----------|---------|
 | 1 | `unimportant` | Spam, newsletters, promotions, marketing |
 | 2 | `receipts` | Purchase receipts, invoices, shipping notices |
-| 3 | `important` | Personal, work, bank alerts, security, OTP |
+| 3 | `priority` | Personal, work, bank alerts, security, OTP |
 | 4 | `email-subs` | Services you subscribed to and may want to manage |
 | 5 | `please-review` | Ambiguous emails or AI failures — needs your eyes |
 | 6 | `processed` | Source of truth — marks emails as "done" |
@@ -376,7 +376,7 @@ After restarting n8n with all environment variables set, activate (Publish) the 
 
 ---
 
-## 📋 DEPLOYMENT CHECKLIST (PRINT THIS!)
+## 📋 DEPLOYMENT CHECKLIST (PRINT THIS!aa)
 
 ### PRE-IMPORT
 - ☐ Gmail OAuth2 Client ID and Secret ready
@@ -385,7 +385,7 @@ After restarting n8n with all environment variables set, activate (Publish) the 
 - ☐ Gemini API Key ready (from Google AI Studio)
 - ☐ Neon Postgres connection details ready
 - ☐ Supervisor V23 workflow ID noted
-- ☐ All 6 Gmail labels created (unimportant, receipts, important, email-subs, please-review, processed)
+- ☐ All 6 Gmail labels created (unimportant, receipts, priority, email-subs, please-review, processed)
 - ☐ Environment variables set in PowerShell
 - ☐ `NODE_FUNCTION_ALLOW_BUILTIN = "crypto"` verified (from Supervisor setup)
 - ☐ `N8N_BLOCK_ENV_ACCESS_IN_NODE = "false"` verified (from Supervisor setup)
@@ -457,7 +457,7 @@ After activating all workflows, run these checks to confirm everything works.
 4. Run Workflow A manually
 
 **Expected result:**
-- Email categorized as `important` with source `whitelist`
+- Email categorized as `priority` with source `whitelist`
 - No Gemini API call made for this email
 
 ### TEST 4: GEMINI CLASSIFICATION
@@ -488,7 +488,7 @@ Send these commands to your bot and verify responses:
 |---------|------------------|
 | `/help` | Full command list with V2.6 Lean header |
 | `/rules` | "No active rules yet" (or your current rules) |
-| `/whitelist test@example.com` | "✅ Rule saved — Future category: important" |
+| `/whitelist test@example.com` | "✅ Rule saved — Future category: priority" |
 | `/unwhitelist test@example.com` | "✅ Rule disabled" |
 | `/blacklistdomain spam.com` | "✅ Rule saved — Future category: unimportant" |
 | `/unblacklistdomain spam.com` | "✅ Rule disabled" |
@@ -665,7 +665,7 @@ Supervisor V23 = catastrophic monitoring (external)
 ### Label Application Order (NEVER reversed)
 
 ```
-1. Apply CATEGORY label (unimportant/receipts/important/email-subs/please-review)
+1. Apply CATEGORY label (unimportant/receipts/priority/email-subs/please-review)
 2. Apply PROCESSED label (visible commit point)
 3. Upsert ledger completed (audit record)
 ```
