@@ -376,7 +376,7 @@ After restarting n8n with all environment variables set, activate (Publish) the 
 
 ---
 
-## 📋 DEPLOYMENT CHECKLIST (PRINT THIS!aa)
+## 📋 DEPLOYMENT CHECKLIST (PRINT THIS!)
 
 ### PRE-IMPORT
 - ☐ Gmail OAuth2 Client ID and Secret ready

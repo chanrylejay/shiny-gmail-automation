@@ -3,18 +3,24 @@
   "nodes": [
     {
       "parameters": {
-        "updates": ["message"],
+        "updates": [
+          "message"
+        ],
         "additionalFields": {}
       },
-      "id": "c01",
+      "id": "5cea9e14-4061-4854-bd6a-3e0b8d056c68",
       "name": "Telegram Rules Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
       "typeVersion": 1.2,
-      "position": [-1800, 0],
+      "position": [
+        -256,
+        384
+      ],
+      "webhookId": "0103e4fc-73e7-4225-9e8c-b0fc622f6366",
       "credentials": {
         "telegramApi": {
-          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
-          "name": "Telegram Bot API"
+          "id": "TCdrbXaZitj2IHZF",
+          "name": "Shiny Gmail TG"
         }
       }
     },
@@ -22,11 +28,204 @@
       "parameters": {
         "jsCode": "// Purpose: Lightweight personal Telegram rules manager for Shiny Gmail.\n// V2.6: Added /unreceipt, /unreview. Dynamic help text for domain vs sender commands.\nconst update = $input.first()?.json || {};\nconst message = update.message || update;\nconst chat = message.chat || {};\nconst from = message.from || {};\nconst account = $env.GMAIL_ACCOUNT || 'primary';\nconst allowedChatId = String($env.TELEGRAM_CHAT_ID || '');\nconst chatId = String(chat.id || message.chat_id || '');\nconst chatType = String(chat.type || 'private');\nconst allowGroups = String($env.TELEGRAM_ALLOW_GROUP_RULES || 'false') === 'true';\nconst telegramUserId = String(from.id || '');\nconst telegramUsername = from.username || '';\nconst text = String(message.text || '').trim();\nfunction out(extra) { return [{ json: { account, chatId, chatType, telegramUserId, telegramUsername, rawText: text, ...extra } }]; }\nif (!allowedChatId) return out({ allowed: false, action: 'reply', replyText: '\\ud83d\\udea8 TELEGRAM_CHAT_ID is missing. Rules Manager is locked.' });\nif (chatId !== allowedChatId) return out({ allowed: false, action: 'reply', replyText: '\\u26d4 Unauthorized.' });\nif (chatType !== 'private' && !allowGroups) return out({ allowed: false, action: 'reply', replyText: '\\u26d4 Rules Manager only accepts private chat commands.' });\nif (!text) return out({ allowed: true, action: 'reply', replyText: 'Send /help for commands.' });\nconst parts = text.split(/\\s+/);\nconst command = String(parts[0] || '').toLowerCase();\nconst value = String(parts[1] || '').toLowerCase().trim();\nconst validEmail = /^[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}$/i;\nconst validDomain = /^[a-z0-9.-]+\\.[a-z]{2,}$/i;\nconst helpText = '\\ud83d\\udccb Shiny Gmail Rules Manager V2.6 Lean\\n\\n' +\n  '<b>Exact sender rules</b>\\n' +\n  '/whitelist email@example.com \\u2192 priority\\n' +\n  '/blacklist email@example.com \\u2192 unimportant\\n' +\n  '/receipt email@example.com \\u2192 receipts\\n' +\n  '/review email@example.com \\u2192 please-review\\n\\n' +\n  '<b>Disable exact sender rules</b>\\n' +\n  '/unwhitelist email@example.com\\n' +\n  '/unblacklist email@example.com\\n' +\n  '/unreceipt email@example.com\\n' +\n  '/unreview email@example.com\\n\\n' +\n  '<b>Domain rules</b>\\n' +\n  '/whitelistdomain example.com \\u2192 priority\\n' +\n  '/blacklistdomain example.com \\u2192 unimportant\\n' +\n  '/unwhitelistdomain example.com\\n' +\n  '/unblacklistdomain example.com\\n\\n' +\n  '<b>View</b>\\n/rules';\nif (command === '/help' || command === '/start') return out({ allowed: true, action: 'help', replyText: helpText });\nif (command === '/rules') return out({ allowed: true, action: 'list' });\nconst upsertMap = {\n  '/whitelist': { ruleType: 'whitelist', matchType: 'exact_sender', priority: 10 },\n  '/blacklist': { ruleType: 'blacklist', matchType: 'exact_sender', priority: 10 },\n  '/receipt': { ruleType: 'force_receipts', matchType: 'exact_sender', priority: 10 },\n  '/review': { ruleType: 'force_review', matchType: 'exact_sender', priority: 10 },\n  '/whitelistdomain': { ruleType: 'whitelist', matchType: 'domain', priority: 20 },\n  '/blacklistdomain': { ruleType: 'blacklist', matchType: 'domain', priority: 20 }\n};\nconst disableMap = {\n  '/unwhitelist': { ruleType: 'whitelist', matchType: 'exact_sender' },\n  '/unblacklist': { ruleType: 'blacklist', matchType: 'exact_sender' },\n  '/unreceipt': { ruleType: 'force_receipts', matchType: 'exact_sender' },\n  '/unreview': { ruleType: 'force_review', matchType: 'exact_sender' },\n  '/unwhitelistdomain': { ruleType: 'whitelist', matchType: 'domain' },\n  '/unblacklistdomain': { ruleType: 'blacklist', matchType: 'domain' }\n};\nif (upsertMap[command]) {\n  const mapped = upsertMap[command];\n  const example = mapped.matchType === 'domain' ? 'example.com' : 'email@example.com';\n  if (!value) return out({ allowed: true, action: 'reply', replyText: `Missing value. Example: ${command} ${example}` });\n  if (mapped.matchType === 'exact_sender' && !validEmail.test(value)) return out({ allowed: true, action: 'reply', replyText: 'Invalid email format.' });\n  if (mapped.matchType === 'domain' && !validDomain.test(value.replace(/^@/, ''))) return out({ allowed: true, action: 'reply', replyText: 'Invalid domain format.' });\n  return out({ allowed: true, action: 'upsert', senderPattern: mapped.matchType === 'domain' ? value.replace(/^@/, '') : value, matchType: mapped.matchType, ruleType: mapped.ruleType, priority: mapped.priority, notes: `Telegram command ${command}` });\n}\nif (disableMap[command]) {\n  const mapped = disableMap[command];\n  const example = mapped.matchType === 'domain' ? 'example.com' : 'email@example.com';\n  if (!value) return out({ allowed: true, action: 'reply', replyText: `Missing value. Example: ${command} ${example}` });\n  if (mapped.matchType === 'exact_sender' && !validEmail.test(value)) return out({ allowed: true, action: 'reply', replyText: 'Invalid email format.' });\n  if (mapped.matchType === 'domain' && !validDomain.test(value.replace(/^@/, ''))) return out({ allowed: true, action: 'reply', replyText: 'Invalid domain format.' });\n  return out({ allowed: true, action: 'disable', senderPattern: mapped.matchType === 'domain' ? value.replace(/^@/, '') : value, matchType: mapped.matchType, ruleType: mapped.ruleType });\n}\nreturn out({ allowed: true, action: 'reply', replyText: 'Unknown command. Send /help.' });"
       },
-      "id": "c02",
+      "id": "7cb4ad3d-3892-43b1-bb35-cf84ab69604a",
       "name": "Parse And Authorize Command",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-1580, 0]
+      "position": [
+        -32,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Purpose: Format simple replies (help + fallback) for Telegram.\n// V2.6: Merged Format Help Reply + Format Generic Reply into one node.\nfunction tg(s) { s = String(s ?? ''); return s.length <= 3900 ? s : s.slice(0, 3900) + '\\n\\n[...truncated]'; }\nreturn [{ json: { chatId: $json.chatId, account: $json.account || $env.GMAIL_ACCOUNT || 'primary', text: tg($json.replyText || 'Send /help for commands.') } }];"
+      },
+      "id": "d08b8472-38b8-4e0c-b056-8475a4719fb5",
+      "name": "Format Simple Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT sender_pattern, match_type, rule_type, priority\nFROM gmail_sender_rules\nWHERE account = $1\n  AND enabled = true\nORDER BY match_type ASC, rule_type ASC, priority ASC, sender_pattern ASC\nLIMIT 100;",
+        "options": {
+          "connectionTimeout": 10,
+          "delayClosingIdleConnection": 5,
+          "queryReplacement": "={{ [$json.account] }}"
+        }
+      },
+      "id": "51cf876f-bce5-46f8-bc6b-9a63161f5fec",
+      "name": "List Sender Rules",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        416,
+        352
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "zFjqWCSydNofNA6f",
+          "name": "Shiny Gmail Postgres"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function h(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction tg(s) { s = String(s ?? ''); return s.length <= 3900 ? s : s.slice(0, 3900) + '\\n\\n[...truncated]'; }\nconst cmd = $('Parse And Authorize Command').first()?.json || {};\nconst first = $input.first()?.json || {};\nif (first.error) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '⚠️ Failed to load rules.' } }];\nconst rows = $input.all().map(i => i.json || {}).filter(r => r.sender_pattern);\nif (!rows.length) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '📋 <b>Your Gmail Rules</b>\\n\\nNo active rules yet.' } }];\nconst groups = { whitelist: [], blacklist: [], force_receipts: [], force_review: [] };\nfor (const r of rows) {\n  const line = `• ${h(r.sender_pattern)} <i>(${h(r.match_type)})</i>`;\n  if (!groups[r.rule_type]) groups[r.rule_type] = [];\n  groups[r.rule_type].push(line);\n}\nconst text = `📋 <b>Your Gmail Rules</b>\\n\\n` +\n  `<b>Whitelist → priority</b>\\n${groups.whitelist.length ? groups.whitelist.join('\\n') : 'None'}\\n\\n` +\n  `<b>Blacklist → unimportant</b>\\n${groups.blacklist.length ? groups.blacklist.join('\\n') : 'None'}\\n\\n` +\n  `<b>Receipts</b>\\n${groups.force_receipts.length ? groups.force_receipts.join('\\n') : 'None'}\\n\\n` +\n  `<b>Please-review</b>\\n${groups.force_review.length ? groups.force_review.join('\\n') : 'None'}`;\nreturn [{ json: { chatId: cmd.chatId, account: cmd.account, text: tg(text) } }];"
+      },
+      "id": "b5f5cb3b-bb1d-48b3-9d94-bd8b80e4e32c",
+      "name": "Format Rules List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO gmail_sender_rules (\n  account,\n  sender_pattern,\n  match_type,\n  rule_type,\n  priority,\n  enabled,\n  notes,\n  created_at,\n  updated_at\n)\nVALUES ($1,$2,$3,$4,$5::int,true,$6,now(),now())\nON CONFLICT (account, sender_pattern, match_type, rule_type)\nDO UPDATE SET\n  enabled = true,\n  priority = EXCLUDED.priority,\n  notes = EXCLUDED.notes,\n  updated_at = now()\nRETURNING sender_pattern, match_type, rule_type, enabled;",
+        "options": {
+          "connectionTimeout": 10,
+          "delayClosingIdleConnection": 5,
+          "queryReplacement": "={{ [$json.account, $json.senderPattern, $json.matchType, $json.ruleType, $json.priority, $json.notes] }}"
+        }
+      },
+      "id": "92af3a3e-450c-4633-8090-51036c4d6d8e",
+      "name": "Upsert Sender Rule",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        416,
+        528
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "zFjqWCSydNofNA6f",
+          "name": "Shiny Gmail Postgres"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function h(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction tg(s) { s = String(s ?? ''); return s.length <= 3900 ? s : s.slice(0, 3900) + '\\n\\n[...truncated]'; }\nconst cmd = $('Parse And Authorize Command').first()?.json || {};\nconst row = $input.first()?.json || {};\nif (row.error) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '⚠️ Failed to save rule.' } }];\nconst category = row.rule_type === 'whitelist' ? 'priority' : row.rule_type === 'blacklist' ? 'unimportant' : row.rule_type === 'force_receipts' ? 'receipts' : 'please-review';\nconst text = `✅ <b>Rule saved</b>\\n\\nPattern: ${h(row.sender_pattern)}\\nMatch: ${h(row.match_type)}\\nRule: ${h(row.rule_type)}\\nFuture category: ${h(category)}`;\nreturn [{ json: { chatId: cmd.chatId, account: cmd.account, text: tg(text) } }];"
+      },
+      "id": "f942e0e5-d43d-4cc0-b9fe-a52ee505fcc1",
+      "name": "Format Upsert Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE gmail_sender_rules\nSET enabled = false,\n    updated_at = now()\nWHERE account = $1\n  AND sender_pattern = $2\n  AND match_type = $3\n  AND rule_type = $4\nRETURNING sender_pattern, match_type, rule_type, enabled;",
+        "options": {
+          "connectionTimeout": 10,
+          "delayClosingIdleConnection": 5,
+          "queryReplacement": "={{ [$json.account, $json.senderPattern, $json.matchType, $json.ruleType] }}"
+        }
+      },
+      "id": "0f33e0bf-f550-4b65-80f1-4c1d0749fadb",
+      "name": "Disable Sender Rule",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        416,
+        704
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "zFjqWCSydNofNA6f",
+          "name": "Shiny Gmail Postgres"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function h(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction tg(s) { s = String(s ?? ''); return s.length <= 3900 ? s : s.slice(0, 3900) + '\\n\\n[...truncated]'; }\nconst cmd = $('Parse And Authorize Command').first()?.json || {};\nconst row = $input.first()?.json || {};\nif (row.error) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '⚠️ Failed to disable rule.' } }];\nif (!row.sender_pattern) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: 'ℹ️ No matching active rule found to disable.' } }];\nconst text = `✅ <b>Rule disabled</b>\\n\\nPattern: ${h(row.sender_pattern)}\\nMatch: ${h(row.match_type)}\\nRule: ${h(row.rule_type)}`;\nreturn [{ json: { chatId: cmd.chatId, account: cmd.account, text: tg(text) } }];"
+      },
+      "id": "9fda1875-95e6-4722-8b0b-6fa68d199e3b",
+      "name": "Format Disable Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "020ea7ea-240e-441b-ba6b-a9895f927828",
+      "name": "Send Telegram Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1008,
+        512
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "webhookId": "21e80411-192a-49ee-8720-b343849b7897",
+      "credentials": {
+        "telegramApi": {
+          "id": "TCdrbXaZitj2IHZF",
+          "name": "Shiny Gmail TG"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "content": "🔒 **Auth & Security (V2.6)**\n\n• TELEGRAM_CHAT_ID must match incoming chat\n• Private chat only (unless TELEGRAM_ALLOW_GROUP_RULES=true)\n• All inputs validated before any DB operation\n• Parameterized Postgres queries only — no SQL injection risk\n\nV2.6: IF chain replaced with Switch node. Format Simple Reply merges help+fallback.",
+        "height": 250,
+        "width": 400
+      },
+      "id": "6a9ff9bc-8c9f-4a25-a7f0-27e126f87794",
+      "name": "Note: Auth Model",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "content": "📋 **Rule Mapping (V2.6)**\n\nwhitelist → priority\nblacklist → unimportant\nreceipt / force_receipts → receipts\nreview / force_review → please-review\n\nMatch types: exact_sender, domain\n\nV2.6: Added /unreceipt and /unreview.\nDynamic help text shows correct example per command type.",
+        "height": 260,
+        "width": 360
+      },
+      "id": "64a5e6ee-c9a7-4fb4-9d90-76ce44a1c181",
+      "name": "Note: Rule Mapping",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        736,
+        -16
+      ]
     },
     {
       "parameters": {
@@ -34,6 +233,12 @@
           "values": [
             {
               "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
                 "conditions": [
                   {
                     "leftValue": "={{ $json.action }}",
@@ -41,57 +246,86 @@
                     "operator": {
                       "type": "string",
                       "operation": "equals"
-                    }
+                    },
+                    "id": "7a4d1146-e0bc-4200-a8db-3a66a7652074"
                   }
-                ]
+                ],
+                "combinator": "and"
               },
               "renameOutput": true,
               "outputKey": "help"
             },
             {
               "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
                 "conditions": [
                   {
+                    "id": "a5dc939d-d40b-4b9f-a3b2-a50e1846a85b",
                     "leftValue": "={{ $json.action }}",
                     "rightValue": "list",
                     "operator": {
                       "type": "string",
-                      "operation": "equals"
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
                     }
                   }
-                ]
+                ],
+                "combinator": "and"
               },
               "renameOutput": true,
               "outputKey": "list"
             },
             {
               "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
                 "conditions": [
                   {
+                    "id": "87b16872-6486-42eb-8537-20f1a35e85c4",
                     "leftValue": "={{ $json.action }}",
                     "rightValue": "upsert",
                     "operator": {
                       "type": "string",
-                      "operation": "equals"
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
                     }
                   }
-                ]
+                ],
+                "combinator": "and"
               },
               "renameOutput": true,
               "outputKey": "upsert"
             },
             {
               "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
                 "conditions": [
                   {
+                    "id": "873dc142-7a0b-4615-872d-14ff72b03507",
                     "leftValue": "={{ $json.action }}",
                     "rightValue": "disable",
                     "operator": {
                       "type": "string",
-                      "operation": "equals"
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
                     }
                   }
-                ]
+                ],
+                "combinator": "and"
               },
               "renameOutput": true,
               "outputKey": "disable"
@@ -102,172 +336,17 @@
           "fallbackOutput": "extra"
         }
       },
-      "id": "c03",
-      "name": "Route Command",
       "type": "n8n-nodes-base.switch",
-      "typeVersion": 3,
-      "position": [-1360, 0]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Purpose: Format simple replies (help + fallback) for Telegram.\n// V2.6: Merged Format Help Reply + Format Generic Reply into one node.\nfunction tg(s) { s = String(s ?? ''); return s.length <= 3900 ? s : s.slice(0, 3900) + '\\n\\n[...truncated]'; }\nreturn [{ json: { chatId: $json.chatId, account: $json.account || $env.GMAIL_ACCOUNT || 'primary', text: tg($json.replyText || 'Send /help for commands.') } }];"
-      },
-      "id": "c04",
-      "name": "Format Simple Reply",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [-1140, -200]
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT sender_pattern, match_type, rule_type, priority\nFROM gmail_sender_rules\nWHERE account = $1\n  AND enabled = true\nORDER BY match_type ASC, rule_type ASC, priority ASC, sender_pattern ASC\nLIMIT 100;",
-        "options": {
-          "queryReplacement": "={{ [$json.account] }}",
-          "connectionTimeout": 10,
-          "delayClosingIdleConnection": 5
-        }
-      },
-      "id": "c05",
-      "name": "List Sender Rules",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [-1140, -40],
-      "credentials": {
-        "postgres": {
-          "id": "REPLACE_WITH_POSTGRES_CREDENTIAL_ID",
-          "name": "Neon Postgres"
-        }
-      },
-      "onError": "continueErrorOutput",
-      "alwaysOutputData": true
-    },
-    {
-      "parameters": {
-        "jsCode": "function h(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction tg(s) { s = String(s ?? ''); return s.length <= 3900 ? s : s.slice(0, 3900) + '\\n\\n[...truncated]'; }\nconst cmd = $('Parse And Authorize Command').first()?.json || {};\nconst first = $input.first()?.json || {};\nif (first.error) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '⚠️ Failed to load rules.' } }];\nconst rows = $input.all().map(i => i.json || {}).filter(r => r.sender_pattern);\nif (!rows.length) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '📋 <b>Your Gmail Rules</b>\\n\\nNo active rules yet.' } }];\nconst groups = { whitelist: [], blacklist: [], force_receipts: [], force_review: [] };\nfor (const r of rows) {\n  const line = `• ${h(r.sender_pattern)} <i>(${h(r.match_type)})</i>`;\n  if (!groups[r.rule_type]) groups[r.rule_type] = [];\n  groups[r.rule_type].push(line);\n}\nconst text = `📋 <b>Your Gmail Rules</b>\\n\\n` +\n  `<b>Whitelist → priority</b>\\n${groups.whitelist.length ? groups.whitelist.join('\\n') : 'None'}\\n\\n` +\n  `<b>Blacklist → unimportant</b>\\n${groups.blacklist.length ? groups.blacklist.join('\\n') : 'None'}\\n\\n` +\n  `<b>Receipts</b>\\n${groups.force_receipts.length ? groups.force_receipts.join('\\n') : 'None'}\\n\\n` +\n  `<b>Please-review</b>\\n${groups.force_review.length ? groups.force_review.join('\\n') : 'None'}`;\nreturn [{ json: { chatId: cmd.chatId, account: cmd.account, text: tg(text) } }];"
-      },
-      "id": "c06",
-      "name": "Format Rules List",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [-920, -40]
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "INSERT INTO gmail_sender_rules (\n  account,\n  sender_pattern,\n  match_type,\n  rule_type,\n  priority,\n  enabled,\n  notes,\n  created_at,\n  updated_at\n)\nVALUES ($1,$2,$3,$4,$5::int,true,$6,now(),now())\nON CONFLICT (account, sender_pattern, match_type, rule_type)\nDO UPDATE SET\n  enabled = true,\n  priority = EXCLUDED.priority,\n  notes = EXCLUDED.notes,\n  updated_at = now()\nRETURNING sender_pattern, match_type, rule_type, enabled;",
-        "options": {
-          "queryReplacement": "={{ [$json.account, $json.senderPattern, $json.matchType, $json.ruleType, $json.priority, $json.notes] }}",
-          "connectionTimeout": 10,
-          "delayClosingIdleConnection": 5
-        }
-      },
-      "id": "c07",
-      "name": "Upsert Sender Rule",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [-1140, 140],
-      "credentials": {
-        "postgres": {
-          "id": "REPLACE_WITH_POSTGRES_CREDENTIAL_ID",
-          "name": "Neon Postgres"
-        }
-      },
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "function h(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction tg(s) { s = String(s ?? ''); return s.length <= 3900 ? s : s.slice(0, 3900) + '\\n\\n[...truncated]'; }\nconst cmd = $('Parse And Authorize Command').first()?.json || {};\nconst row = $input.first()?.json || {};\nif (row.error) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '⚠️ Failed to save rule.' } }];\nconst category = row.rule_type === 'whitelist' ? 'priority' : row.rule_type === 'blacklist' ? 'unimportant' : row.rule_type === 'force_receipts' ? 'receipts' : 'please-review';\nconst text = `✅ <b>Rule saved</b>\\n\\nPattern: ${h(row.sender_pattern)}\\nMatch: ${h(row.match_type)}\\nRule: ${h(row.rule_type)}\\nFuture category: ${h(category)}`;\nreturn [{ json: { chatId: cmd.chatId, account: cmd.account, text: tg(text) } }];"
-      },
-      "id": "c08",
-      "name": "Format Upsert Reply",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [-920, 140]
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "UPDATE gmail_sender_rules\nSET enabled = false,\n    updated_at = now()\nWHERE account = $1\n  AND sender_pattern = $2\n  AND match_type = $3\n  AND rule_type = $4\nRETURNING sender_pattern, match_type, rule_type, enabled;",
-        "options": {
-          "queryReplacement": "={{ [$json.account, $json.senderPattern, $json.matchType, $json.ruleType] }}",
-          "connectionTimeout": 10,
-          "delayClosingIdleConnection": 5
-        }
-      },
-      "id": "c09",
-      "name": "Disable Sender Rule",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [-1140, 320],
-      "credentials": {
-        "postgres": {
-          "id": "REPLACE_WITH_POSTGRES_CREDENTIAL_ID",
-          "name": "Neon Postgres"
-        }
-      },
-      "onError": "continueErrorOutput",
-      "alwaysOutputData": true
-    },
-    {
-      "parameters": {
-        "jsCode": "function h(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction tg(s) { s = String(s ?? ''); return s.length <= 3900 ? s : s.slice(0, 3900) + '\\n\\n[...truncated]'; }\nconst cmd = $('Parse And Authorize Command').first()?.json || {};\nconst row = $input.first()?.json || {};\nif (row.error) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '⚠️ Failed to disable rule.' } }];\nif (!row.sender_pattern) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: 'ℹ️ No matching active rule found to disable.' } }];\nconst text = `✅ <b>Rule disabled</b>\\n\\nPattern: ${h(row.sender_pattern)}\\nMatch: ${h(row.match_type)}\\nRule: ${h(row.rule_type)}`;\nreturn [{ json: { chatId: cmd.chatId, account: cmd.account, text: tg(text) } }];"
-      },
-      "id": "c10",
-      "name": "Format Disable Reply",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [-920, 320]
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $json.chatId }}",
-        "text": "={{ $json.text }}",
-        "additionalFields": {
-          "parse_mode": "HTML"
-        }
-      },
-      "id": "c11",
-      "name": "Send Telegram Reply",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [-540, 120],
-      "credentials": {
-        "telegramApi": {
-          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
-          "name": "Telegram Bot API"
-        }
-      },
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 3000,
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "content": "🔒 **Auth & Security (V2.6)**\n\n• TELEGRAM_CHAT_ID must match incoming chat\n• Private chat only (unless TELEGRAM_ALLOW_GROUP_RULES=true)\n• All inputs validated before any DB operation\n• Parameterized Postgres queries only — no SQL injection risk\n\nV2.6: IF chain replaced with Switch node. Format Simple Reply merges help+fallback.",
-        "width": 400,
-        "height": 250
-      },
-      "id": "s-c01",
-      "name": "Note: Auth Model",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [-1800, -300]
-    },
-    {
-      "parameters": {
-        "content": "📋 **Rule Mapping (V2.6)**\n\nwhitelist → priority\nblacklist → unimportant\nreceipt / force_receipts → receipts\nreview / force_review → please-review\n\nMatch types: exact_sender, domain\n\nV2.6: Added /unreceipt and /unreview.\nDynamic help text shows correct example per command type.",
-        "width": 360,
-        "height": 260
-      },
-      "id": "s-c02",
-      "name": "Note: Rule Mapping",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [-1360, -300]
+      "typeVersion": 3.4,
+      "position": [
+        176,
+        384
+      ],
+      "id": "f2c06b7b-5e59-49ec-8150-823685beb80f",
+      "name": "Route Command"
     }
   ],
+  "pinData": {},
   "connections": {
     "Telegram Rules Trigger": {
       "main": [
@@ -285,45 +364,6 @@
         [
           {
             "node": "Route Command",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Route Command": {
-      "main": [
-        [
-          {
-            "node": "Format Simple Reply",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "List Sender Rules",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Upsert Sender Rule",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Disable Sender Rule",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Format Simple Reply",
             "type": "main",
             "index": 0
           }
@@ -428,32 +468,81 @@
         ]
       ]
     },
-    "Send Telegram Reply": {
-      "main": [[], []]
+    "Route Command": {
+      "main": [
+        [
+          {
+            "node": "Format Simple Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "List Sender Rules",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upsert Sender Rule",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Disable Sender Rule",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Simple Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
+  "active": true,
   "settings": {
     "executionOrder": "v1",
-    "timezone": "Asia/Manila",
-    "saveManualExecutions": true,
-    "callerPolicy": "workflowsFromSameOwner",
-    "executionTimeout": 300,
-    "errorWorkflow": "REPLACE_WITH_SUPERVISOR_WORKFLOW_ID"
+    "binaryMode": "separate"
   },
-  "pinData": {},
-  "staticData": null,
+  "versionId": "a1fc68c2-084b-4225-8400-348e86569db6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "22da58545622faa6c02ad360173659ae50818de9a11aee046593ea6a8484167e"
+  },
+  "id": "C5I2GRGcoJ3XZhRc",
   "tags": [
     {
+      "updatedAt": "2026-05-23T13:31:34.608Z",
+      "createdAt": "2026-05-23T13:31:34.608Z",
+      "id": "CudxntHEWCORZbsl",
       "name": "gmail"
     },
     {
+      "updatedAt": "2026-05-23T13:31:34.610Z",
+      "createdAt": "2026-05-23T13:31:34.610Z",
+      "id": "IPOda0BO6Kst71j0",
+      "name": "v2.6-lean"
+    },
+    {
+      "updatedAt": "2026-05-23T13:31:34.598Z",
+      "createdAt": "2026-05-23T13:31:34.598Z",
+      "id": "Wb42Dfyl9vpWd09s",
       "name": "shiny-gmail-automation"
     },
     {
+      "updatedAt": "2026-05-23T14:22:30.773Z",
+      "createdAt": "2026-05-23T14:22:30.773Z",
+      "id": "u6jiqUBzP0WHNDPn",
       "name": "telegram-rules-manager"
-    },
-    {
-      "name": "v2.6-lean"
     }
   ]
 }
