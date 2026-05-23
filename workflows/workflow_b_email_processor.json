@@ -216,7 +216,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        496,
+        720,
         304
       ],
       "credentials": {
@@ -236,7 +236,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        688,
+        976,
         304
       ]
     },
@@ -303,8 +303,8 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -144,
-        -80
+        -496,
+        -16
       ]
     },
     {
@@ -318,8 +318,8 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -960,
-        -64
+        -928,
+        0
       ]
     },
     {
@@ -423,6 +423,30 @@
       ],
       "id": "d3d5e399-4c62-4d17-8569-a5e6effee460",
       "name": "Needs Gemini?"
+    },
+    {
+      "parameters": {
+        "operation": "removeLabels",
+        "messageId": "={{ $('Prepare Final Category').first().json.messageId }}",
+        "labelIds": [
+          "INBOX"
+        ]
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        512,
+        304
+      ],
+      "id": "18db4a73-1f09-4ee0-82d1-efe3c01942fe",
+      "name": "Archive Email",
+      "webhookId": "9e81650e-1939-4195-b7fd-1768cd6542a2",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "LFLkJHbSWHnGRJ1P",
+          "name": "Shiny Gmail OAuth"
+        }
+      }
     }
   ],
   "pinData": {},
@@ -558,7 +582,7 @@
       "main": [
         [
           {
-            "node": "Upsert Ledger Completed",
+            "node": "Archive Email",
             "type": "main",
             "index": 0
           }
@@ -672,6 +696,17 @@
           }
         ]
       ]
+    },
+    "Archive Email": {
+      "main": [
+        [
+          {
+            "node": "Upsert Ledger Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
@@ -679,7 +714,7 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "9d61bd14-9962-4548-834a-e034aa08a965",
+  "versionId": "a0d2025c-90b4-4cd3-b9dc-8db6afd2924c",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "22da58545622faa6c02ad360173659ae50818de9a11aee046593ea6a8484167e"
