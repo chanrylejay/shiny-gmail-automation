@@ -327,7 +327,7 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        1920,
+        1952,
         -16
       ],
       "webhookId": "ef8da1d7-d997-4d50-a50d-ac9727de64fc"
@@ -477,13 +477,15 @@
     },
     {
       "parameters": {
-        "options": {}
+        "options": {
+          "reset": false
+        }
       },
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
-        992,
-        144
+        1008,
+        192
       ],
       "id": "4f7d9eb6-218f-43e5-b9c2-f2dc1b8b7f46",
       "name": "Split Emails"
@@ -771,11 +773,6 @@
             "node": "Split Emails",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Wait Between Emails",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -891,7 +888,7 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "a0201b31-6fc0-479b-9331-66641b85db55",
+  "versionId": "f0733cc8-c3e2-46f2-9674-f0167968643e",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "22da58545622faa6c02ad360173659ae50818de9a11aee046593ea6a8484167e"
