@@ -1,37 +1,32 @@
 {
-  "name": "Shiny Gmail Daily Orchestrator V2.6 Lean",
+  "name": "Shiny Gmail Daily Orchestrator V4.0 Lean",
   "nodes": [
     {
       "parameters": {
         "rule": {
           "interval": [
             {
-              "triggerAtHour": 6
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
             }
           ]
         }
       },
-      "id": "92c20dd4-f7ac-4d26-a79b-4d118ef76e4e",
-      "name": "Daily Schedule",
+      "id": "b9ee593d-c820-40d0-ae6b-212c03a02003",
+      "name": "Daily Schedule 6AM Manila",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [
-        -2080,
-        608
-      ]
+      "position": [0, 0]
     },
     {
       "parameters": {
-        "jsCode": "// Purpose: Build the daily run context and validate required environment variables.\nconst crypto = require('crypto');\n\nconst account = $env.GMAIL_ACCOUNT || 'primary';\nconst runId = crypto.randomUUID();\nconst runDate = new Date().toISOString().slice(0, 10);\nconst executionId = String($execution.id);\nconst workflowName = 'Shiny Gmail Daily Orchestrator V2.6 Lean';\n\nconst required = ['GMAIL_ACCOUNT', 'GEMINI_API_KEY', 'TELEGRAM_CHAT_ID'];\nconst missing = required.filter(k => !$env[k]);\n\nreturn [{\n  json: {\n    account,\n    runId,\n    runDate,\n    executionId,\n    workflowName,\n    envOk: missing.length === 0,\n    missingEnv: missing,\n    runStatus: missing.length > 0 ? 'failed' : 'running',\n    failureStage: missing.length > 0 ? 'env_validation' : null,\n    errorMessage: missing.length > 0 ? `Missing required env vars: ${missing.join(', ')}` : null,\n    requiredLabels: ['unimportant','receipts','priority','email-subs','please-review','processed'],\n    startedAt: new Date().toISOString(),\n    runStarted: false\n  }\n}];"
+        "jsCode": "const crypto = require('crypto');\nfunction intEnv(k,d,min,max){const n=Number($env[k]);return Number.isFinite(n)?Math.min(Math.max(Math.trunc(n),min),max):d;}\nconst account=$env.GMAIL_ACCOUNT||'primary';\nconst required=['GEMINI_API_KEY','TELEGRAM_CHAT_ID'];\nconst missing=required.filter(k=>!$env[k]);\nreturn [{json:{workflowName:'Shiny Gmail Daily Orchestrator V4.0 Lean',runId:crypto.randomUUID(),account,startedAt:new Date().toISOString(),envOk:missing.length===0,missingEnv:missing,batchSize:intEnv('GMAIL_BATCH_SIZE',50,1,500),waitSeconds:intEnv('WAIT_BETWEEN_EMAILS',5,0,300),categories:['priority','finances','accounts-subscriptions','account-security','unimportant','needs-review'],processedLabel:'processed'}}];"
       },
-      "id": "6ba1bdb5-40f1-491e-baf1-58a788531750",
+      "id": "bb73e54d-1381-4f77-a369-80d41f208227",
       "name": "Build Context And Validate Env",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        -1872,
-        272
-      ]
+      "position": [220, 0]
     },
     {
       "parameters": {
@@ -44,54 +39,47 @@
           ]
         }
       },
-      "id": "d5873719-d54c-4807-80ff-96b3354655f1",
+      "id": "50d9a32c-ad6a-4679-b890-95229e9c1741",
       "name": "Env OK?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [
-        -1712,
-        608
-      ]
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const c=$('Build Context And Validate Env').first().json;return [{json:{chatId:$env.TELEGRAM_CHAT_ID,text:`🚫 <b>Shiny Gmail V4.0 blocked</b>\n\nMissing env var(s): <code>${(c.missingEnv||[]).join(', ')}</code>\nNo emails were touched.`}}];"
+      },
+      "id": "57c4ea99-dadc-4a79-a880-0ffc1298bbf4",
+      "name": "Build Env Error Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 160]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT run_id, execution_id, started_at\nFROM gmail_workflow_runs\nWHERE account = $1\n  AND status = 'running'\n  AND started_at > now() - interval '30 minutes'\nORDER BY started_at DESC\nLIMIT 1;",
+        "query": "={{\"WITH expired AS (UPDATE gmail_workflow_runs SET status='timed_out', error_message='Stale run auto-cleaned by next daily run.', finished_at=NOW(), updated_at=NOW() WHERE account='\" + $('Build Context And Validate Env').first().json.account.replace(/'/g,\"''\") + \"' AND status='running' AND started_at <= NOW() - INTERVAL '30 minutes' RETURNING run_id), active AS (SELECT run_id, started_at FROM gmail_workflow_runs WHERE account='\" + $('Build Context And Validate Env').first().json.account.replace(/'/g,\"''\") + \"' AND status='running' AND started_at > NOW() - INTERVAL '30 minutes' ORDER BY started_at DESC LIMIT 1), last_done AS (SELECT finished_at, completed_count FROM gmail_workflow_runs WHERE account='\" + $('Build Context And Validate Env').first().json.account.replace(/'/g,\"''\") + \"' AND status LIKE 'completed%' AND finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT 1) SELECT EXISTS(SELECT 1 FROM active) AS active_run, (SELECT COUNT(*) FROM expired) AS expired_count, (SELECT run_id FROM active) AS active_run_id, (SELECT finished_at FROM last_done) AS last_completed_at, (SELECT completed_count FROM last_done) AS last_completed_count;\"}}",
         "options": {
           "connectionTimeout": 10,
-          "delayClosingIdleConnection": 5,
-          "queryReplacement": "={{ [$json.account] }}"
+          "delayClosingIdleConnection": 5
         }
       },
-      "id": "d336a2e9-bcae-4f2b-a401-f06096083de4",
+      "id": "8074ef0c-ffe2-4d0a-b992-744552f277ef",
       "name": "Simple Run Guard Query",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        -1552,
-        256
-      ],
-      "alwaysOutputData": true,
-      "credentials": {
-        "postgres": {
-          "id": "zFjqWCSydNofNA6f",
-          "name": "Shiny Gmail Postgres"
-        }
-      },
-      "onError": "continueErrorOutput"
+      "position": [660, -80],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "// Purpose: Evaluate whether another recent run is already active.\n// V2.6: Guard failure conservatively assumes active run (fail-safe, not fail-open).\nconst ctx = $('Build Context And Validate Env').first()?.json || {};\nconst row = $input.first()?.json || {};\n\nif (row.error) {\n  return [{\n    json: {\n      ...ctx,\n      guardFailed: true,\n      activeRun: true,\n      runStatus: 'failed',\n      failureStage: 'run_guard_query',\n      errorMessage: row.error?.message || 'Run guard query failed. Skipping as precaution.',\n      runStarted: false\n    }\n  }];\n}\n\nconst activeRun = Boolean(row.run_id);\n\nreturn [{\n  json: {\n    ...ctx,\n    activeRun,\n    activeRunId: row.run_id || null,\n    activeRunStartedAt: row.started_at || null,\n    runStatus: activeRun ? 'skipped_active_run' : 'running',\n    failureStage: activeRun ? 'active_run_guard' : null,\n    errorMessage: activeRun ? `Skipped because another run is active: ${row.run_id}` : ctx.errorMessage,\n    runStarted: false\n  }\n}];"
+        "jsCode": "const c=$('Build Context And Validate Env').first().json;const row=$input.first()?.json||{};const dbError=!!row.error;return [{json:{...c,activeRun:dbError?true:Boolean(row.active_run),activeRunId:row.active_run_id||null,expiredStaleRuns:Number(row.expired_count||0),lastCompletedAt:row.last_completed_at||null,lastCompletedCount:row.last_completed_count??null,guardDbError:dbError,guardErrorMessage:row.error?.message||null}}];"
       },
-      "id": "02155e2f-8dde-4c8d-823f-4c6deb55479a",
+      "id": "cf76a126-4000-4776-8497-afcc75e2c19f",
       "name": "Evaluate Run Guard",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        -1296,
-        256
-      ]
+      "position": [880, -80]
     },
     {
       "parameters": {
@@ -104,430 +92,261 @@
           ]
         }
       },
-      "id": "53f7f8e9-ec14-4c94-9821-c0c8239bdbcb",
+      "id": "3e882314-83b2-40ef-b119-b8048dc7725d",
       "name": "Active Run?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [
-        -1072,
-        256
-      ]
+      "position": [1100, -80]
+    },
+    {
+      "parameters": {
+        "jsCode": "const j=$input.first().json;const reason=j.guardDbError?'Run guard database check failed; fail-safe skip activated.':`Another run is already active${j.activeRunId?` (${j.activeRunId})`:''}.`;let text=`⏭️ <b>Shiny Gmail V4.0 skipped</b>\n\n${reason}\n\nNo emails were touched.`;if(j.expiredStaleRuns)text+=`\n\n⚠️ Auto-cleaned ${Number(j.expiredStaleRuns)} stale run(s) from a previous crash before skipping.`;return [{json:{chatId:$env.TELEGRAM_CHAT_ID,text}}];"
+      },
+      "id": "7f6cb461-3db4-4db4-a064-4984f88f80d5",
+      "name": "Build Skipped Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 60]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO gmail_workflow_runs (\n  run_id,\n  account,\n  workflow_name,\n  execution_id,\n  status,\n  started_at,\n  updated_at\n)\nVALUES (\n  $1::uuid,\n  $2,\n  $3,\n  $4,\n  'running',\n  now(),\n  now()\n)\nON CONFLICT (run_id)\nDO UPDATE SET\n  execution_id = EXCLUDED.execution_id,\n  status = 'running',\n  updated_at = now()\nRETURNING run_id, account, status;",
+        "query": "={{\"INSERT INTO gmail_workflow_runs (run_id, account, status, started_at, created_at, updated_at) VALUES ('\" + $json.runId.replace(/'/g,\"''\") + \"','\" + $json.account.replace(/'/g,\"''\") + \"','running', NOW(), NOW(), NOW()) RETURNING run_id, account, status, started_at;\"}}",
         "options": {
           "connectionTimeout": 10,
-          "delayClosingIdleConnection": 5,
-          "queryReplacement": "={{ [$json.runId, $json.account, $json.workflowName, $json.executionId] }}"
+          "delayClosingIdleConnection": 5
         }
       },
-      "id": "c072e073-d89c-494b-8425-027e590e37e9",
+      "id": "30a4531d-1e0c-4cbf-b92a-ffb26d49ce2e",
       "name": "Mark Run Started",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        -784,
-        336
-      ],
-      "alwaysOutputData": true,
-      "credentials": {
-        "postgres": {
-          "id": "zFjqWCSydNofNA6f",
-          "name": "Shiny Gmail Postgres"
-        }
-      },
-      "onError": "continueErrorOutput"
+      "position": [1320, -180],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
         "resource": "label",
+        "operation": "getAll",
         "returnAll": true
       },
-      "id": "b8308861-88b2-4623-9f7a-5fda22fb768f",
+      "id": "f37ee71a-d7f5-4a1a-a031-2a4d2f74fce9",
       "name": "Get Gmail Labels",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [
-        -800,
-        80
-      ],
-      "webhookId": "a3be23f0-ade6-4043-beea-249ac0da1762",
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "LFLkJHbSWHnGRJ1P",
-          "name": "Shiny Gmail OAuth"
-        }
-      },
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "// Purpose: Validate required Gmail labels and build labelMap for child workflow.\nconst baseCtx = $('Evaluate Run Guard').first()?.json || $('Build Context And Validate Env').first()?.json || {};\nconst first = $input.first()?.json || {};\n\nif (first.error) {\n  return [{\n    json: {\n      ...baseCtx,\n      runStarted: true,\n      labelsOk: false,\n      runStatus: 'failed',\n      failureStage: 'gmail_label_fetch',\n      errorMessage: first.error?.message || 'Failed to fetch Gmail labels.',\n      labelMap: {}\n    }\n  }];\n}\n\nconst labels = $input.all().map(i => i.json || {}).filter(l => l.id && l.name);\nconst labelMap = {};\n\nfor (const label of labels) {\n  const name = String(label.name || '').toLowerCase();\n  if ((baseCtx.requiredLabels || []).includes(name)) labelMap[name] = label.id;\n}\n\nconst missing = (baseCtx.requiredLabels || []).filter(l => !labelMap[l]);\n\nreturn [{\n  json: {\n    ...baseCtx,\n    runStarted: true,\n    labelsOk: missing.length === 0,\n    missingLabels: missing,\n    labelMap,\n    processedLabelId: labelMap.processed || null,\n    runStatus: missing.length ? 'failed' : 'running',\n    failureStage: missing.length ? 'gmail_label_validation' : null,\n    errorMessage: missing.length ? `Missing Gmail labels: ${missing.join(', ')}` : null\n  }\n}];"
-      },
-      "id": "81a599f3-7ecd-40fc-9f79-4c9c7e3e9374",
-      "name": "Validate Labels And Build Map",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -560,
-        80
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json.labelsOk }}",
-              "value2": true
-            }
-          ]
-        }
-      },
-      "id": "446bc571-2dc6-4516-b33b-f4438cf5b046",
-      "name": "Labels OK?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [
-        -368,
-        80
-      ]
+      "position": [1540, -180],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT sender_pattern, match_type, rule_type, priority, notes\nFROM gmail_sender_rules\nWHERE account = $1\n  AND enabled = true\nORDER BY priority ASC, created_at DESC;",
+        "query": "={{ \"SELECT sender_pattern, match_type, rule_type, priority, enabled, created_at FROM gmail_sender_rules WHERE account='\" + $('Build Context And Validate Env').first().json.account.replace(/'/g, \"''\") + \"' AND enabled = true ORDER BY priority ASC, CASE WHEN match_type='exact' THEN 0 ELSE 1 END, created_at DESC;\" }}",
         "options": {
           "connectionTimeout": 10,
-          "delayClosingIdleConnection": 5,
-          "queryReplacement": "={{ [$json.account] }}"
+          "delayClosingIdleConnection": 5
         }
       },
-      "id": "28209032-54b9-4ab0-b28d-8db83223741e",
-      "name": "Load Sender Rules",
+      "id": "243af4ae-c5e8-4170-b7db-0c713b34619a",
+      "name": "Get Sender Rules",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        -96,
-        48
-      ],
-      "alwaysOutputData": true,
-      "credentials": {
-        "postgres": {
-          "id": "zFjqWCSydNofNA6f",
-          "name": "Shiny Gmail Postgres"
-        }
-      },
-      "onError": "continueErrorOutput"
+      "position": [1760, -180],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "// Purpose: Pack many sender-rule rows into one item so Fetch Inbox Emails runs exactly once.\nconst ctx = $('Validate Labels And Build Map').first()?.json || {};\nconst rows = $input.all().map(i => i.json || {});\nconst failed = rows.some(r => r.error);\nconst errorRow = rows.find(r => r.error);\n\nreturn [{\n  json: {\n    ...ctx,\n    rulesFailed: failed,\n    rulesError: failed ? (errorRow?.error?.message || 'Failed to load sender rules.') : null,\n    senderRules: failed ? [] : rows.filter(r => r.sender_pattern && r.rule_type)\n  }\n}];"
-      },
-      "id": "2e338b8c-bda2-45ef-a9f4-bd9b292b93c6",
-      "name": "Pack Sender Rules",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        144,
-        48
-      ]
-    },
-    {
-      "parameters": {
+        "resource": "message",
         "operation": "getAll",
-        "limit": "={{ Number($env.GMAIL_BATCH_SIZE || 50) }}",
+        "returnAll": false,
+        "limit": "={{ $('Build Context And Validate Env').first().json.batchSize }}",
         "filters": {
           "q": "is:inbox -label:processed"
         }
       },
-      "id": "1e2e5c29-bf3b-457c-977a-4ab46d8d84a6",
+      "id": "b0aa08ed-d604-4203-abd0-cb0c65bcf941",
       "name": "Fetch Inbox Emails",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [
-        352,
-        48
-      ],
-      "alwaysOutputData": true,
-      "webhookId": "0d3e70c6-5594-4565-bcf1-a630bd56589f",
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "LFLkJHbSWHnGRJ1P",
-          "name": "Shiny Gmail OAuth"
-        }
-      },
-      "onError": "continueErrorOutput"
+      "position": [1980, -180],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "// Purpose: Normalize Gmail search results into one child-processing item per email.\n// V2.6: Same-run dedup by email.id + subdomain matching for domain rules.\nconst ctx = $('Pack Sender Rules').first()?.json || $('Validate Labels And Build Map').first()?.json || {};\nconst packedRules = $('Pack Sender Rules').first()?.json || {};\nconst rulesFailed = Boolean(packedRules.rulesFailed);\nconst rules = packedRules.senderRules || [];\n\nconst inboxItems = $input.all().map(i => i.json || {});\nconst inboxFailed = inboxItems.some(e => e.error);\n\nif (rulesFailed) {\n  return [{\n    json: {\n      ...ctx,\n      noWork: true,\n      runStatus: 'failed',\n      failureStage: 'sender_rules_load',\n      totalDiscovered: 0,\n      errorMessage: packedRules.rulesError || 'Failed to load sender rules.'\n    }\n  }];\n}\n\nif (inboxFailed) {\n  return [{\n    json: {\n      ...ctx,\n      noWork: true,\n      runStatus: 'failed',\n      failureStage: 'gmail_inbox_fetch',\n      totalDiscovered: 0,\n      errorMessage: inboxItems.find(e => e.error)?.error?.message || 'Failed to fetch inbox emails.'\n    }\n  }];\n}\n\nconst rawEmails = inboxItems.filter(e => e.id);\n\n// Deduplicate by email.id to prevent duplicate loop iterations\nconst seen = new Map();\nfor (const email of rawEmails) {\n  if (!seen.has(email.id)) seen.set(email.id, email);\n}\nconst uniqueEmails = Array.from(seen.values());\n\nfunction getHeader(e, k) {\n  const h = e.headers || e.payload?.headers || [];\n  const f = h.find(x => String(x.name || '').toLowerCase() === k.toLowerCase());\n  return f?.value || '';\n}\n\nfunction extractEmail(r) {\n  const s = String(r || '').toLowerCase();\n  const m = s.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}/i);\n  return m ? m[0].toLowerCase() : s.trim();\n}\n\nfunction domainOf(s) {\n  return String(s || '').split('@')[1] || '';\n}\n\nfunction matchRule(sender, rules) {\n  const domain = domainOf(sender);\n  for (const r of rules) {\n    const pattern = String(r.sender_pattern || '').toLowerCase().trim();\n    const matchType = String(r.match_type || 'exact_sender').toLowerCase();\n    if (matchType === 'exact_sender' && sender === pattern) return r;\n    const p = pattern.replace(/^@/, '');\n    if (matchType === 'domain' && (domain === p || domain.endsWith('.' + p))) return r;\n  }\n  return null;\n}\n\nfunction ruleToCategory(rule) {\n  if (!rule) return null;\n  const t = String(rule.rule_type || '').toLowerCase();\n  if (t === 'whitelist') return 'priority';\n  if (t === 'blacklist') return 'unimportant';\n  if (t === 'force_receipts') return 'receipts';\n  if (t === 'force_review') return 'please-review';\n  return null;\n}\n\nfunction ruleToSource(rule) {\n  if (!rule) return 'ai';\n  const matchType = String(rule.match_type || 'exact_sender').toLowerCase();\n  const ruleType = String(rule.rule_type || '').toLowerCase();\n  if (matchType === 'domain' && ruleType === 'whitelist') return 'domain_whitelist';\n  if (matchType === 'domain' && ruleType === 'blacklist') return 'domain_blacklist';\n  return ruleType;\n}\n\nif (!uniqueEmails.length) {\n  return [{\n    json: {\n      ...ctx,\n      noWork: true,\n      runStatus: 'completed',\n      failureStage: null,\n      totalDiscovered: 0,\n      totalCompleted: 0,\n      totalFailed: 0,\n      totalSkipped: 0,\n      totalReview: 0\n    }\n  }];\n}\n\nreturn uniqueEmails.map(email => {\nconst fromRaw = email.From || email.from || getHeader(email, 'from');\nconst sender = extractEmail(fromRaw);\nconst subject = email.Subject || email.subject || getHeader(email, 'subject') || '(no subject)';\nconst snippet = email.snippet || '';\nconst messageId = email.id;\nconst threadId = email.threadId || '';\nconst date = email.Date || email.date || getHeader(email, 'date') || '';\n  const matchedRule = matchRule(sender, rules);\n  const ruleCategory = ruleToCategory(matchedRule);\n  const requiresGemini = !ruleCategory;\n\n  return {\n    json: {\n      account: ctx.account,\n      runId: ctx.runId,\n      runDate: ctx.runDate,\n      executionId: ctx.executionId,\n      workflowName: ctx.workflowName,\n      messageId,\n      threadId,\n      sender,\n      fromRaw,\n      subject,\n      snippet,\n      date,\n      labelMap: ctx.labelMap,\n      processedLabelId: ctx.processedLabelId,\n      matchedRule: matchedRule || null,\n      category: ruleCategory || null,\n      source: ruleCategory ? ruleToSource(matchedRule) : 'ai',\n      confidence: ruleCategory ? 1 : null,\n      reasoning: ruleCategory ? `Matched sender rule: ${matchedRule.rule_type}.` : null,\n      requiresGemini,\n      noWork: false,\n      totalDiscovered: uniqueEmails.length\n    }\n  };\n});"
+        "jsCode": "const context=$('Build Context And Validate Env').first().json;\nconst guard=(()=>{try{return $('Evaluate Run Guard').first().json}catch{return {}}})();\nfunction all(name){try{return $(name).all().map(i=>i.json)}catch{return []}}\nfunction errorCode(err){const msg=String(err?.message||err||'');const m=msg.match(/status\\s*code\\s*(\\d{3})/i)||msg.match(/\\b(401|403|429|5\\d\\d)\\b/);return Number(err?.httpCode||err?.statusCode||err?.code||(m?m[1]:0));}\nfunction gmailHint(err,what){const c=errorCode(err);if(c===401)return `${what}: Gmail credential expired. Re-authorize in n8n credentials.`;if(c===403)return `${what}: Gmail API access forbidden. Check OAuth scopes.`;if(c===429)return `${what}: Gmail API rate limit hit. Will retry on next run.`;if(c>=500)return `${what}: Gmail server error. Transient — will retry on next run.`;return `${what}: Unexpected Gmail error (${c||'unknown'}).`;}\nfunction empty(status,msg,extra={}){return [{json:{noWork:true,runId:context.runId,account:context.account,startedAt:context.startedAt,status,totalDiscovered:0,completed:0,failed:0,needsReview:0,batchSaturated:false,categoryCounts:{},sourceCounts:{},confidenceBands:{high:0,medium:0,review:0,failed:0},inlineDigest:[],reviewDetails:[],failedDetails:[],warningDetails:[],warningCount:0,reviewReasonCounts:{},ruleSuggestions:[],ruleWarning:null,lastCompletedAt:guard.lastCompletedAt||null,lastCompletedCount:guard.lastCompletedCount??null,errorMessage:msg,...extra}}]}\ntry{\n const runStarted=$('Mark Run Started').first()?.json||{};\n function extractEmail(raw){const m=String(raw||'').match(/[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}/i);return m?m[0].toLowerCase():'';}\n function getHeader(email,name){const h=(email.payload?.headers||email.headers||[]).find(x=>String(x.name||'').toLowerCase()===name.toLowerCase());return h?.value||'';}\n function domainOf(sender){return String(sender||'').split('@').pop().toLowerCase()}\n function parseDateMs(s){const ms=new Date(s||0).getTime();return Number.isFinite(ms)?ms:0;}\n function ruleCategory(rule){const t=String(rule.rule_type||'').toLowerCase();if(t==='whitelist')return'priority';if(t==='blacklist')return'unimportant';if(['receipt','force_receipts','finance','force_finance'].includes(t))return'finances';if(['review','force_review'].includes(t))return'needs-review';return null;}\n function ruleToSource(rule){const t=String(rule.rule_type||'').toLowerCase();if(t==='whitelist')return'whitelist';if(t==='blacklist')return'blacklist';if(['receipt','force_receipts','finance','force_finance'].includes(t))return'force_finance';if(['review','force_review'].includes(t))return'force_review';return rule.rule_type||'rule_matched';}\n function ruleSort(a,b){const p=Number(a.priority??100)-Number(b.priority??100);if(p!==0)return p;const mt=(a.match_type==='exact'?0:1)-(b.match_type==='exact'?0:1);if(mt!==0)return mt;return String(b.created_at||'').localeCompare(String(a.created_at||''));}\n function findRule(sender,rules){const d=domainOf(sender);for(const r of rules.filter(x=>x.enabled!==false&&x.enabled!=='false').sort(ruleSort)){const p=String(r.sender_pattern||'').toLowerCase().trim();const mt=String(r.match_type||'exact').toLowerCase();if(!p)continue;if(mt==='exact'&&sender===p)return r;if(mt==='domain'&&(d===p||d.endsWith('.'+p)))return r;}return null;}\n function rank(item){const c=item.json.ruleCategory;if(c==='priority')return 0;if(c==='finances')return 1;if(c==='needs-review')return 2;if(c==='unimportant')return 3;if(item.json.needsGemini)return 4;return 5;}\n if(runStarted.error||!runStarted.run_id)return empty('failed',`Run record could not be created. Gmail label/email fetch may have occurred, but no Gmail labels/archive mutations were performed.${runStarted.error?.message?' Reason: '+String(runStarted.error.message).slice(0,300):''}`,{runStartError:true});\n const labelRows=all('Get Gmail Labels');const labelErr=labelRows.find(r=>r.error);if(labelErr)return empty('failed',`${gmailHint(labelErr.error,'Could not load Gmail labels')} No Gmail mutations were performed.`,{labelError:true});\n const fetchRows=all('Fetch Inbox Emails');const fetchErr=fetchRows.find(r=>r.error);if(fetchErr)return empty('failed',`${gmailHint(fetchErr.error,'Could not fetch inbox')} No Gmail mutations were performed.`,{gmailFetchError:true});\n const labelMap={};for(const l of labelRows){const name=l.name||l.Name||l.labelName||'';const id=l.id||l.labelId||l.Id||'';if(name&&id)labelMap[name]=id;}\n const missing=[...context.categories,context.processedLabel].filter(x=>!labelMap[x]);if(missing.length)return empty('failed',`Missing Gmail label(s): ${missing.join(', ')}. Create them at: https://mail.google.com/mail/u/0/#settings/labels`,{labelError:true});\n const ruleRows=all('Get Sender Rules');const ruleDbError=ruleRows.some(r=>r.error);const rules=ruleDbError?[]:ruleRows;const ruleWarning=ruleDbError?'Sender rules unavailable; processed using AI/rule-free path.':null;\n const seen=new Set(),out=[];\n for(const email of fetchRows){const messageId=email.id||email.messageId||email.gmail_message_id;if(!messageId||seen.has(messageId))continue;seen.add(messageId);const fromRaw=email.From||email.from||getHeader(email,'from');const toRaw=email.To||email.to||getHeader(email,'to')||'';const ccRaw=email.Cc||email.cc||getHeader(email,'cc')||'';const sender=extractEmail(fromRaw);const subject=email.Subject||email.subject||getHeader(email,'subject')||'(no subject)';const subjectClean=String(subject||'').trim();const snippet=String(email.snippet||'').slice(0,300);const barrenMetadata=!sender&&(!subjectClean||subjectClean==='(no subject)')&&!snippet.trim();const matched=sender?findRule(sender,rules):null;const category=matched?ruleCategory(matched):(barrenMetadata?'needs-review':null);const source=matched?ruleToSource(matched):(barrenMetadata?'metadata_empty':null);const date=email.Date||email.date||getHeader(email,'date')||'';out.push({json:{runId:context.runId,account:context.account,startedAt:context.startedAt,totalDiscovered:seen.size,messageId,threadId:email.threadId||email.thread_id||null,sender,fromRaw:String(fromRaw||'').trim(),toRaw:String(toRaw).slice(0,200),ccRaw:String(ccRaw).slice(0,150),subject:String(subject).slice(0,200),date,snippet,labelMap,processedLabelId:labelMap[context.processedLabel],ruleCategory:category,ruleSource:source,confidence:barrenMetadata?0:undefined,reasoning:barrenMetadata?'No usable sender, subject, or snippet metadata was available.':undefined,needsGemini:!category,ruleMode:ruleDbError?'ai_only_rules_unavailable':'rules_enabled',ruleWarning,lastCompletedAt:guard.lastCompletedAt||null,lastCompletedCount:guard.lastCompletedCount??null}})}\n if(!out.length)return empty('completed',null,{ruleWarning});out.sort((a,b)=>{const r=rank(a)-rank(b);if(r!==0)return r;if(a.json.needsGemini&&b.json.needsGemini){const ta=a.json.threadId||'',tb=b.json.threadId||'';if(ta!==tb)return ta<tb?-1:1;}return parseDateMs(a.json.date)-parseDateMs(b.json.date);});const total=out.length;const batchSaturated=total>=context.batchSize;for(const item of out){item.json.totalDiscovered=total;item.json.batchSaturated=batchSaturated;}return out;\n}catch(e){return empty('failed',`Normalization failed before Gmail mutations. ${String(e.message||e).slice(0,300)}`,{normalizationError:true});}"
       },
-      "id": "25f31b21-69d6-4fa0-93ac-13a18fb32397",
+      "id": "f173d740-0fd3-4b38-bf0d-03b641d73956",
       "name": "Normalize Emails And Apply Rules",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        576,
-        128
-      ]
-    },
-    {
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "KbqFms0usTj4sJpF",
-          "mode": "list",
-          "cachedResultUrl": "/workflow/KbqFms0usTj4sJpF",
-          "cachedResultName": "Shiny Gmail Single Email Processor Child V2.6 Lean"
-        },
-        "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
-        },
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      },
-      "id": "b86d91ab-8af0-4226-b038-724ab77fd811",
-      "name": "Call Single Email Processor",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.3,
-      "position": [
-        1472,
-        -16
-      ],
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "// V2.6: Added failureStage for child crashes.\nconst input = $input.first()?.json || {};\nif (input.error) {\n  const current = $('Split Emails').first()?.json || {};\n  return [{\n    json: {\n      status: 'failed',\n      messageId: current.messageId || null,\n      category: current.category || null,\n      source: current.source || 'child_error',\n      reasoning: current.reasoning || null,\n      confidence: current.confidence ?? 0,\n      failureStage: 'child_execution_failed',\n      errorMessage: input.error?.message || 'Child workflow execution failed.',\n      ledgerWarning: false\n    }\n  }];\n}\nreturn [{ json: input }];"
-      },
-      "id": "ff9522ed-03aa-43d5-a1c8-baa6735dcd13",
-      "name": "Normalize Child Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1712,
-        -16
-      ]
-    },
-    {
-      "parameters": {
-        "amount": "={{ Number($env.WAIT_BETWEEN_EMAILS || 1) }}"
-      },
-      "id": "17bb05ce-e6a0-4c7a-a72c-0497e1942423",
-      "name": "Wait Between Emails",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [
-        1952,
-        -16
-      ],
-      "webhookId": "ef8da1d7-d997-4d50-a50d-ac9727de64fc"
-    },
-    {
-      "parameters": {
-        "jsCode": "// Purpose: Aggregate loop results from the SplitInBatches done output.\n// V2.6: Uses $input.all() + propagated totalDiscovered + zero-results guard.\nfunction safeNode(name) {\n  try { return $(name).first()?.json || null; } catch (e) { return null; }\n}\n\nconst ctx = safeNode('Validate Labels And Build Map') || safeNode('Build Context And Validate Env') || {};\nconst results = $input.all().map(i => i.json || {});\n\nif (!results.length) {\n  return [{\n    json: {\n      ...ctx,\n      runStatus: 'completed_empty_loop',\n      failureStage: null,\n      totalDiscovered: ctx.totalDiscovered ?? 0,\n      totalCompleted: 0,\n      totalFailed: 0,\n      totalSkipped: 0,\n      totalReview: 0,\n      ledgerWarnings: 0,\n      aiFailedCount: 0,\n      failedDetails: [],\n      errorMessage: null\n    }\n  }];\n}\n\nconst discovered = results[0]?.totalDiscovered ?? results.length;\n\nconst totalCompleted = results.filter(r => r.status === 'completed').length;\nconst totalFailed = results.filter(r => r.status === 'failed').length;\nconst totalSkipped = results.filter(r => r.status === 'skipped').length;\nconst totalReview = results.filter(r => r.category === 'please-review').length;\nconst ledgerWarnings = results.filter(r => r.ledgerWarning).length;\nconst aiFailedCount = results.filter(r => r.source === 'ai_failed').length;\nconst runStatus = totalFailed > 0 ? 'completed_with_failures' : 'completed';\n\nreturn [{\n  json: {\n    ...ctx,\n    runStatus,\n    failureStage: null,\n    totalDiscovered: discovered,\n    totalCompleted,\n    totalFailed,\n    totalSkipped,\n    totalReview,\n    ledgerWarnings,\n    aiFailedCount,\n    failedDetails: results.filter(r => r.status === 'failed').slice(0, 10).map(r => ({ messageId: r.messageId, error: r.errorMessage })),\n    errorMessage: totalFailed > 0 ? `${totalFailed} email(s) failed during processing.` : null\n  }\n}];"
-      },
-      "id": "f47fcc00-152f-4c5c-b8d2-8be4a85e0df7",
-      "name": "Build Final Summary",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1312,
-        208
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Purpose: Normalize all non-processing exits into one daily summary shape.\nfunction safeNode(name) {\n  try { return $(name).first()?.json || null; } catch (e) { return null; }\n}\n\nconst incoming = $json || {};\nconst fallbackCtx = safeNode('Validate Labels And Build Map') || safeNode('Evaluate Run Guard') || safeNode('Build Context And Validate Env') || {};\nconst ctx = { ...fallbackCtx, ...incoming };\n\nconst incomingError = incoming.error?.message || incoming.errorMessage || null;\nconst finalError = incomingError || ctx.errorMessage || null;\nconst finalStatus = finalError ? 'failed' : (ctx.runStatus || 'completed');\n\nreturn [{\n  json: {\n    ...ctx,\n    runStatus: finalStatus,\n    failureStage: ctx.failureStage || (finalError ? 'summary_convergence' : null),\n    totalDiscovered: ctx.totalDiscovered || 0,\n    totalCompleted: ctx.totalCompleted || 0,\n    totalFailed: ctx.totalFailed || 0,\n    totalSkipped: ctx.totalSkipped || 0,\n    totalReview: ctx.totalReview || 0,\n    ledgerWarnings: ctx.ledgerWarnings || 0,\n    aiFailedCount: ctx.aiFailedCount || 0,\n    errorMessage: finalError,\n    skipMarkFinished: !ctx.runStarted || ctx.runStatus === 'skipped_active_run'\n  }\n}];"
-      },
-      "id": "ff97fc38-674d-45fe-9495-a01861af3cbd",
-      "name": "Build No Work Summary",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -32,
-        448
-      ]
+      "position": [2200, -180]
     },
     {
       "parameters": {
         "conditions": {
           "boolean": [
             {
-              "value1": "={{ $json.skipMarkFinished }}",
+              "value1": "={{ Boolean($json.noWork) }}",
               "value2": true
             }
           ]
         }
       },
-      "id": "e6cc1c5c-b02b-4960-8d5f-cd97902725ff",
-      "name": "Should Skip Mark Finished?",
+      "id": "ec0554cd-e643-4e9c-8de9-3c5fcad40143",
+      "name": "No Work?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [
-        192,
-        448
-      ]
+      "position": [2420, -180]
     },
     {
       "parameters": {
-        "operation": "executeQuery",
-        "query": "UPDATE gmail_workflow_runs\nSET status = $2,\n    total_discovered = $3::int,\n    total_completed = $4::int,\n    total_failed = $5::int,\n    total_skipped = $6::int,\n    total_review = $7::int,\n    error_message = $8,\n    finished_at = now(),\n    updated_at = now()\nWHERE run_id = $1::uuid\nRETURNING run_id, account, status, total_discovered, total_completed, total_failed, total_skipped, total_review;",
-        "options": {
-          "connectionTimeout": 10,
-          "delayClosingIdleConnection": 5,
-          "queryReplacement": "={{ [$json.runId, $json.runStatus, $json.totalDiscovered || 0, $json.totalCompleted || 0, $json.totalFailed || 0, $json.totalSkipped || 0, $json.totalReview || 0, $json.errorMessage || null] }}"
-        }
+        "jsCode": "const j=$input.first().json;return [{json:{runId:j.runId,account:j.account,startedAt:j.startedAt,finishedAt:new Date().toISOString(),status:j.status||'completed',totalDiscovered:j.totalDiscovered||0,completed:j.completed||0,failed:j.failed||0,needsReview:j.needsReview||0,batchSaturated:!!j.batchSaturated,categoryCounts:j.categoryCounts||{},sourceCounts:j.sourceCounts||{},confidenceBands:j.confidenceBands||{high:0,medium:0,review:0,failed:0},inlineDigest:j.inlineDigest||[],reviewDetails:j.reviewDetails||[],failedDetails:j.failedDetails||[],warningDetails:j.warningDetails||[],warningCount:j.warningCount||0,reviewReasonCounts:j.reviewReasonCounts||{},ruleSuggestions:j.ruleSuggestions||[],ruleWarning:j.ruleWarning||null,lastCompletedAt:j.lastCompletedAt||null,lastCompletedCount:j.lastCompletedCount??null,errorMessage:j.errorMessage||null,labelError:!!j.labelError,runStartError:!!j.runStartError,gmailFetchError:!!j.gmailFetchError,normalizationError:!!j.normalizationError}}];"
       },
-      "id": "c172b001-21a6-4c28-ae2e-3a1387d7b18e",
-      "name": "Mark Run Finished",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        720,
-        464
-      ],
-      "credentials": {
-        "postgres": {
-          "id": "zFjqWCSydNofNA6f",
-          "name": "Shiny Gmail Postgres"
-        }
-      },
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "// Purpose: Format the daily run summary for Telegram notification.\n// V2.6: Error message sanitization to prevent credential leakage.\nfunction safeNode(name) {\n  try { return $(name).first()?.json || null; } catch (e) { return null; }\n}\nfunction h(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction tg(s) { s = String(s ?? ''); return s.length <= 3900 ? s : s.slice(0, 3900) + '\\n\\n[...truncated]'; }\nfunction sanitize(s) {\n  if (!s) return s;\n  return String(s)\n    .replace(/postgres(?:ql)?:\\/\\/[^\\s]+/gi, '[REDACTED_URL]')\n    .replace(/(?:api[_-]?key|token|secret|password|credential)[s]?\\s*[=:]\\s*\\S+/gi, '[REDACTED]');\n}\n\nconst summary = safeNode('Build Final Summary') || safeNode('Build No Work Summary') || safeNode('Evaluate Run Guard') || safeNode('Build Context And Validate Env') || {};\nconst db = $input.first()?.json || {};\nconst dbError = sanitize(db.error?.message || null);\nconst status = db.status || summary.runStatus || 'completed';\nconst icon = (Number(summary.totalFailed || 0) > 0 || String(status).includes('failed') || dbError) ? '⚠️' : '✅';\n\nconst reviewAlert = Number(summary.totalReview || 0) > 0 ? `\\n🔔 <b>${Number(summary.totalReview || 0)} email(s) need your review.</b>` : '';\nconst ledgerNote = Number(summary.ledgerWarnings || 0) > 0 ? `\\nLedger warnings: ${Number(summary.ledgerWarnings || 0)} email(s) processed but ledger update had warnings.` : '';\nconst aiFailedNote = Number(summary.aiFailedCount || 0) > 0 ? `\\nAI fallback: ${Number(summary.aiFailedCount || 0)} email(s) routed safely to please-review.` : '';\nconst finalizationNote = dbError ? `\\nRun summary DB update failed: ${h(dbError)}` : '';\nconst failureStage = summary.failureStage ? `\\nFailure stage: ${h(sanitize(summary.failureStage))}` : '';\nconst started = summary.startedAt ? `\\nStarted: ${h(summary.startedAt)}` : '';\nconst footer = `\\n\\nExecution ID: ${h(summary.executionId || 'unknown')}`;\n\nconst text = `${icon} <b>🧹 Shiny Gmail Daily Run</b>\\n\\nAccount: ${h(summary.account)}\\nStatus: ${h(status)}\\nEmails found: ${Number(summary.totalDiscovered || 0)}\\nCompleted: ${Number(summary.totalCompleted || 0)}\\nSkipped: ${Number(summary.totalSkipped || 0)}\\nPlease-review: ${Number(summary.totalReview || 0)}\\nFailures: ${Number(summary.totalFailed || 0)}${reviewAlert}${ledgerNote}${aiFailedNote}${finalizationNote}${failureStage}${started}\\n\\n${Number(summary.totalDiscovered || 0) === 0 ? 'Nothing to clean today.' : 'Daily Gmail cleanup finished.'}${summary.errorMessage ? `\\n\\nNote: ${h(sanitize(summary.errorMessage))}` : ''}${footer}`;\n\nreturn [{ json: { ...summary, text: tg(text) } }];"
-      },
-      "id": "a71419a6-0a50-4ffc-929a-417e9e1b77e9",
-      "name": "Format Telegram Summary",
+      "id": "b1db2b00-32a4-4480-904f-566e4962d3a2",
+      "name": "Build No Work Summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1584,
-        400
-      ]
+      "position": [2640, -40]
     },
     {
       "parameters": {
-        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
-        "text": "={{ $json.text }}",
-        "additionalFields": {
-          "parse_mode": "HTML"
-        }
+        "batchSize": 1,
+        "options": {}
       },
-      "id": "c148ac80-abd9-4207-8b6f-40d04d6a1081",
-      "name": "Send Telegram Summary",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        1840,
-        400
-      ],
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 3000,
-      "webhookId": "262c709b-37a0-46d1-8750-b94486521eb8",
-      "credentials": {
-        "telegramApi": {
-          "id": "TCdrbXaZitj2IHZF",
-          "name": "Shiny Gmail TG"
-        }
-      },
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "content": "📌 **Source of Truth Model (V2.6)**\n\n• Gmail `processed` label = operational source of truth\n• Postgres ledger = audit / idempotency helper ONLY\n• If ledger says completed but Gmail lacks `processed` → reapply labels\n• Supervisor V23 handles catastrophic failures externally\n• Guard failure = conservative abort (fail-safe, not fail-open)\n• Same-run email dedup prevents inflated counts\n• Inter-email wait is configurable via WAIT_BETWEEN_EMAILS env var\n• Domain rules match subdomains (e.g., example.com catches mail.example.com)",
-        "height": 300,
-        "width": 420
-      },
-      "id": "f7507d03-76f0-4c40-95ff-89eb76cdc1fe",
-      "name": "Note: SoT Model",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -608,
-        -448
-      ]
-    },
-    {
-      "parameters": {
-        "content": "🔄 **Daily Flow (V2.6)**\n\nSchedule → Env Check → Run Guard (fail-safe) → Mark Started → Gmail Labels → Sender Rules → Fetch Inbox → Normalize & Dedup → Split 1-by-1 → Child Processor → Summary ($input.all) → Mark Finished → Telegram\n\nAll no-work and error exits converge at Build No Work Summary → Telegram.\nError messages are sanitized before Telegram to prevent credential leakage.\ntotalDiscovered propagated from a14 for stable summary counts.",
-        "height": 240,
-        "width": 460
-      },
-      "id": "4060382f-e0c9-4a51-9b66-b4a5f69323ec",
-      "name": "Note: Flow Overview",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        64,
-        -432
-      ]
-    },
-    {
-      "parameters": {
-        "options": {
-          "reset": false
-        }
-      },
+      "id": "dcff46fb-5981-41db-bb17-ffe519dcf64c",
+      "name": "Split Emails",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [
-        1008,
-        192
-      ],
-      "id": "4f7d9eb6-218f-43e5-b9c2-f2dc1b8b7f46",
-      "name": "Split Emails"
+      "position": [2640, -300]
+    },
+    {
+      "parameters": {
+        "workflowId": "REPLACE_WITH_WORKFLOW_B_ID",
+        "options": {}
+      },
+      "id": "7275fe04-8556-43f4-9482-28733b6a66db",
+      "name": "Call Single Email Processor",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [2860, -420],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$input.first()?.json||{};const parent=(()=>{try{return $('Split Emails').first().json}catch{return {}}})();function isAiSource(s){return ['ai','ai_low_confidence','ai_failed'].includes(String(s||''));}function waitMultiplierFrom(obj){const err=String(obj.errorMessage||obj.error?.message||'').toLowerCase();return(err.includes('429')||err.includes('503')||err.includes('unavailable')||err.includes('resource_exhausted')||err.includes('rate'))?3:1;}if(input.error)return[{json:{status:'failed',messageId:parent.messageId||input.messageId||null,sender:parent.sender||null,subject:parent.subject||null,category:'needs-review',source:'child_execution_failed',confidence:0,reasoning:'Child workflow execution failed.',errorMessage:String(input.error.message||input.error||'Unknown child error').slice(0,500),failureStage:'child_execution_failed',totalDiscovered:parent.totalDiscovered||0,batchSaturated:!!parent.batchSaturated,ruleWarning:parent.ruleWarning||null,usedGeminiBudget:Boolean(parent.needsGemini),dynamicWaitMultiplier:waitMultiplierFrom(input)}}];const usedGeminiBudget=Boolean(parent.needsGemini||isAiSource(input.source));return[{json:{...input,totalDiscovered:parent.totalDiscovered||input.totalDiscovered||0,batchSaturated:!!(parent.batchSaturated||input.batchSaturated),ruleWarning:parent.ruleWarning||input.ruleWarning||null,usedGeminiBudget,dynamicWaitMultiplier:waitMultiplierFrom(input)}}];"
+      },
+      "id": "4ca3c517-0cc1-4972-8316-14333c1e0968",
+      "name": "Normalize Child Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3080, -420]
     },
     {
       "parameters": {
         "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 3
-          },
-          "conditions": [
+          "boolean": [
             {
-              "id": "2e2d5d27-3df5-4c06-b42f-ec273d117cfc",
-              "leftValue": "={{ $json.noWork }}",
-              "rightValue": "true",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
+              "value1": "={{ Boolean($json.usedGeminiBudget) }}",
+              "value2": true
             }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
+          ]
+        }
       },
+      "id": "b1bb743c-109d-4bee-bd14-255c48cfc88b",
+      "name": "Used Gemini?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        752,
-        128
-      ],
-      "id": "af8e0b38-69e7-40ad-9aa7-07b33dc63544",
-      "name": "No Work?"
+      "typeVersion": 1,
+      "position": [3300, -420]
+    },
+    {
+      "parameters": {
+        "amount": "={{ $('Build Context And Validate Env').first().json.waitSeconds * ($json.dynamicWaitMultiplier || 1) }}",
+        "unit": "seconds"
+      },
+      "id": "a96f425e-6037-412e-ba77-e16b3e748bc7",
+      "name": "Wait Between Emails",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [3520, -500]
+    },
+    {
+      "parameters": {
+        "jsCode": "function countBy(arr,key){const o={};for(const r of arr){const v=r[key]||'unknown';o[v]=(o[v]||0)+1;}return o;}function reviewHint(r){if(!r.sender)return'missing sender';if(r.source==='metadata_empty')return'missing metadata';if(r.source==='ledger_reuse')return'ledger-inherited';if(r.source==='ai_low_confidence')return'low AI confidence';if(r.source==='ai_failed')return'AI unavailable';if(r.source==='force_review')return'operator rule';if(r.source==='thread_reuse')return'thread-inherited';return'ambiguous metadata';}\nconst context=$('Build Context And Validate Env').first().json;const guard=(()=>{try{return $('Evaluate Run Guard').first().json}catch{return {}}})();const results=$input.all().map(i=>i.json||{}).filter(r=>r.messageId||r.status);const completedItems=[],failedItems=[],reviewItems=[],warningItems=[];let ledgerWarningCount=0,ruleWarning=null,maxDiscovered=results.length,batchSaturated=results.some(r=>r.batchSaturated);const confidenceBands={high:0,medium:0,review:0,failed:0};\nfor(const r of results){maxDiscovered=Math.max(maxDiscovered,Number(r.totalDiscovered||0));const status=String(r.status||'');const done=status.startsWith('completed');if(done)completedItems.push(r);else failedItems.push(r);if(status==='completed_with_warnings')warningItems.push(r);if(done&&r.category==='needs-review')reviewItems.push(r);if(r.ledgerWarning)ledgerWarningCount++;if(!ruleWarning&&r.ruleWarning)ruleWarning=r.ruleWarning;if(['ai','ai_low_confidence','ai_failed'].includes(r.source)){const c=Number(r.confidence||0);if(r.source==='ai_failed')confidenceBands.failed++;else if(r.category==='needs-review')confidenceBands.review++;else if(c>=0.9)confidenceBands.high++;else if(c>=0.8)confidenceBands.medium++;}}\nconst inlineDigest=completedItems.slice(0,7).map(r=>({messageId:r.messageId||null,sender:r.sender||'unknown',subject:String(r.subject||'(no subject)').slice(0,80),category:r.category||null,source:r.source||null,confidence:r.confidence??0}));\nconst failedDetails=failedItems.slice(0,5).map(r=>({messageId:r.messageId||null,sender:r.sender||'unknown',subject:String(r.subject||'(no subject)').slice(0,80),category:r.category||null,source:r.source||null,failureStage:r.failureStage||null,errorMessage:r.errorMessage||null}));const reviewDetails=reviewItems.slice(0,5).map(r=>({messageId:r.messageId||null,sender:r.sender||'unknown',subject:String(r.subject||'(no subject)').slice(0,80),source:r.source||'unknown',confidence:r.confidence??0,hint:reviewHint(r),reasoning:r.reasoning||'No reasoning.'}));const reviewReasonCounts={},runReviewSenders={};for(const r of reviewItems){const hint=reviewHint(r);reviewReasonCounts[hint]=(reviewReasonCounts[hint]||0)+1;if(r.sender)runReviewSenders[r.sender]=(runReviewSenders[r.sender]||0)+1;}const ruleSuggestions=Object.entries(runReviewSenders).filter(([s,c])=>c>=2).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([sender,count])=>({sender,count,hint:`${count}× needs-review → /review ${sender}, /receipt ${sender}, or /whitelist ${sender}`}));const warningDetails=warningItems.slice(0,3).map(r=>({messageId:r.messageId||null,sender:r.sender||'unknown',subject:String(r.subject||'(no subject)').slice(0,80),errorMessage:r.errorMessage||'Completed with warning.'}));return[{json:{runId:context.runId,account:context.account,startedAt:context.startedAt,finishedAt:new Date().toISOString(),status:failedItems.length?'completed_with_failures':(warningItems.length?'completed_with_warnings':'completed'),totalDiscovered:maxDiscovered,completed:completedItems.length,failed:failedItems.length,needsReview:reviewItems.length,batchSaturated,categoryCounts:countBy(completedItems,'category'),sourceCounts:countBy(completedItems,'source'),confidenceBands,ledgerWarningCount,warningCount:warningItems.length,reviewReasonCounts,ruleSuggestions,ruleWarning,lastCompletedAt:guard.lastCompletedAt||null,lastCompletedCount:guard.lastCompletedCount??null,inlineDigest,reviewDetails,failedDetails,warningDetails}}];"
+      },
+      "id": "54389f25-d735-40c1-bf94-62c304661f78",
+      "name": "Build Final Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, -180]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{\"UPDATE gmail_workflow_runs SET status='\"+String($json.status||'completed').replace(/'/g,\"''\")+\"', total_discovered=\"+Number($json.totalDiscovered||0)+\", completed_count=\"+Number($json.completed||0)+\", failed_count=\"+Number($json.failed||0)+\", review_count=\"+Number($json.needsReview||0)+\", error_message=\"+($json.errorMessage?\"'\"+String($json.errorMessage).slice(0,500).replace(/'/g,\"''\")+\"'\":\"NULL\")+\", finished_at=NOW(), updated_at=NOW() WHERE run_id='\"+String($json.runId).replace(/'/g,\"''\")+\"' RETURNING status, finished_at;\"}}",
+        "options": {
+          "connectionTimeout": 10,
+          "delayClosingIdleConnection": 5
+        }
+      },
+      "id": "fe1efb20-ddfc-43a7-9ac0-ac7dcc30bae8",
+      "name": "Mark Run Finished",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [3080, -40],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "function getNode(name){try{return $(name).first().json}catch{return null}}function h(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}function clampTelegram(text,max=3900){if(text.length<=max)return text;let cut=text.slice(0,max-180);const lastLt=cut.lastIndexOf('<'),lastGt=cut.lastIndexOf('>');if(lastLt>lastGt)cut=cut.slice(0,lastLt);for(const tag of ['b','i','code','pre','a','s','u']){const opens=(cut.match(new RegExp(`<${tag}[\\\\s>]`,'gi'))||[]).length;const closes=(cut.match(new RegExp(`</${tag}>`,'gi'))||[]).length;for(let i=0;i<opens-closes;i++)cut+=`</${tag}>`;}return cut+'\\n\\n…truncated. Use /recent or DB for full details.';}function fmtTime(ts){try{return new Date(ts).toLocaleString('en-PH',{timeZone:'Asia/Manila',hour12:true})}catch{return String(ts||'unknown')}}function relativeTime(dateStr){const ms=Date.now()-new Date(dateStr||0).getTime();if(!dateStr||!Number.isFinite(ms))return'unknown';const min=Math.floor(ms/60000);if(min<1)return'just now';if(min<60)return`${min}m ago`;const hr=Math.floor(min/60);if(hr<24)return`${hr}h ago`;const d=Math.floor(hr/24);if(d<7)return`${d}d ago`;return`${Math.floor(d/7)}w ago`;}function duration(a,b){const ms=new Date(b).getTime()-new Date(a).getTime();if(!Number.isFinite(ms)||ms<0)return'unknown';const s=Math.round(ms/1000),m=Math.floor(s/60),r=s%60;if(m>=60){const h=Math.floor(m/60),rm=m%60;return `${h}h ${rm}m ${r}s`;}return m?`${m}m ${r}s`:`${r}s`}function emojiCat(c){const e={'priority':'🔴','finances':'💰','accounts-subscriptions':'🔔','account-security':'🔐','unimportant':'🗑','needs-review':'🔎'};return `${e[c]||''} ${c||'unknown'}`.trim();}function countsLine(obj){const order=['priority','finances','accounts-subscriptions','account-security','unimportant','needs-review'];const parts=order.filter(k=>obj?.[k]).map(k=>`${emojiCat(k)}: ${obj[k]}`);return parts.length?parts.join(' | '):'none'}function sourceLine(src){const order=['whitelist','blacklist','force_finance','force_review','thread_reuse','ledger_reuse','metadata_empty','ai','ai_low_confidence','ai_failed'];const seen=new Set(),parts=[];for(const k of order){if(src?.[k]){parts.push(`${k}: ${src[k]}`);seen.add(k);}}for(const [k,v] of Object.entries(src||{})){if(!seen.has(k))parts.push(`${k}: ${v}`);}return parts.length?parts.join(' | '):'none'}function link(id){return id?`https://mail.google.com/mail/u/0/#all/${encodeURIComponent(id)}`:null}\nconst summary=getNode('Build Final Summary')||getNode('Build No Work Summary')||$input.first().json||{};const db=$input.first().json||{};const guard=getNode('Evaluate Run Guard')||{};const dbError=!!db.error;\nif(!summary.errorMessage&&!summary.labelError&&!summary.runStartError&&!summary.gmailFetchError&&!summary.normalizationError&&(summary.totalDiscovered||0)===0&&!summary.ruleWarning&&!guard.expiredStaleRuns){let condensed=`✅ 🧹 No new emails · ${h(duration(summary.startedAt,summary.finishedAt||new Date().toISOString()))}`;if(summary.lastCompletedAt){condensed+=` · Last activity: ${h(relativeTime(summary.lastCompletedAt))}`;if(summary.lastCompletedCount!=null)condensed+=` (${summary.lastCompletedCount})`;const age=Date.now()-new Date(summary.lastCompletedAt).getTime();if(Number.isFinite(age)&&age>48*3600*1000)condensed+=`\\n⚠️ No completed run in 48+ hours — verify Gmail credentials.`;}return[{json:{chatId:$env.TELEGRAM_CHAT_ID,text:condensed}}];}\nconst icon=summary.status==='failed'||dbError?'⚠️':summary.failed?'⚠️':'✅';let verdict='✅ Clean run — no action needed.';if(summary.failed)verdict='⚠️ Processing failures need log review.';else if(summary.warningCount)verdict='⚠️ Processed with warnings; check linked emails.';else if(summary.needsReview)verdict=`🔎 Review ${summary.needsReview} uncertain email(s).`;else if(summary.ruleWarning)verdict='🚫 Automation degraded — sender rules unavailable.';let text=`${icon} <b>🧹 Shiny Gmail Daily Run</b>\\n<b>Verdict:</b> ${h(verdict)}\\n\\n`;\ntext+=`<b>Status:</b> ${h(summary.status||'completed')}\\n<b>Started:</b> ${h(fmtTime(summary.startedAt))}\\n<b>Duration:</b> ${h(duration(summary.startedAt,summary.finishedAt||new Date().toISOString()))}\\n`;if(summary.lastCompletedAt){text+=`<b>Last completed run:</b> ${h(relativeTime(summary.lastCompletedAt))}${summary.lastCompletedCount!=null?` (${summary.lastCompletedCount} email(s))`:''}\\n`;}text+=`\\n`;\ntext+=`<b>Emails found:</b> ${summary.totalDiscovered||0}\\n`;if(summary.batchSaturated)text+=`⚠️ Batch full (${summary.totalDiscovered}/${$('Build Context And Validate Env').first().json.batchSize}) — more emails may be waiting in inbox.\\n`;text+=`<b>Completed:</b> ${summary.completed||0}\\n<b>Failures:</b> ${summary.failed||0}\\n<b>Needs-review:</b> ${summary.needsReview||0}\\n\\n`;\ntext+=`<b>Categories:</b> ${h(countsLine(summary.categoryCounts||{}))}\\n`;const src=summary.sourceCounts||{};text+=`<b>Sources:</b> ${h(sourceLine(src))}\\n`;const totalSrc=Object.values(src).reduce((s,v)=>s+Number(v||0),0);const aiCount=Number(src.ai||0)+Number(src.ai_low_confidence||0)+Number(src.ai_failed||0);if(totalSrc>0){const rules=Number(src.whitelist||0)+Number(src.blacklist||0)+Number(src.force_finance||0)+Number(src.force_review||0);const thread=Number(src.thread_reuse||0);const ledger=Number(src.ledger_reuse||0);const explicitBypass=rules+thread+ledger;const otherNonAi=Math.max(0,totalSrc-aiCount-explicitBypass);text+=`⚡ AI bypass: ${Math.round((explicitBypass/totalSrc)*100)}% (${explicitBypass}/${totalSrc}) — rules: ${rules}, thread: ${thread}, ledger: ${ledger}`;if(otherNonAi)text+=` · other non-AI: ${otherNonAi}`;text+=`\\n`;}\nif((summary.completed||0)<=7&&Array.isArray(summary.inlineDigest)&&summary.inlineDigest.length){text+=`\\n<b>Processed emails</b>\\n`+summary.inlineDigest.map((r,i)=>{const l=link(r.messageId);const subj=h(String(r.subject||'(no subject)').slice(0,60));const srcTxt=r.source==='ai'?`ai·${h(r.confidence)}`:h(r.source||'');return`${i+1}. ${emojiCat(r.category)} — ${h(r.sender||'unknown')}\\n${l?`<a href=\"${l}\">${subj}</a>`:subj} [${srcTxt}]`;}).join('\\n');}\nconst bands=summary.confidenceBands||{};if((bands.high||bands.medium||bands.review||bands.failed)||summary.ruleWarning||summary.ledgerWarningCount||summary.warningCount||guard.expiredStaleRuns||summary.needsReview||summary.batchSaturated){text+=`\\n\\n<b>Diagnostics</b>\\n`;if(summary.batchSaturated)text+=`⚠️ Batch saturated: increase GMAIL_BATCH_SIZE or trigger another run.\\n`;if(bands.high||bands.medium||bands.review||bands.failed)text+=`AI confidence: high ${Number(bands.high||0)} | medium ${Number(bands.medium||0)} | review ${Number(bands.review||0)} | failed ${Number(bands.failed||0)}\\n`;if(summary.needsReview&&summary.reviewReasonCounts)text+=`🔎 Review causes: `+Object.entries(summary.reviewReasonCounts).map(([k,v])=>`${h(k)}: ${v}`).join(' | ')+`\\n`;if(summary.ruleWarning)text+=`⚠️ Rules degraded: ${h(summary.ruleWarning)}\\n`;if(summary.ledgerWarningCount)text+=`⚠️ Ledger warnings: ${Number(summary.ledgerWarningCount)}\\n`;if(summary.warningCount)text+=`⚠️ Completed with warnings: ${Number(summary.warningCount)}\\n`;if(guard.expiredStaleRuns)text+=`⚠️ Auto-cleaned ${Number(guard.expiredStaleRuns)} stale run(s).\\n`;}\nif(Array.isArray(summary.warningDetails)&&summary.warningDetails.length)text+=`\\n<b>Warning digest</b>\\n`+summary.warningDetails.map((w,i)=>{const l=link(w.messageId);return`${i+1}. ${h(w.sender)}\\n${l?`<a href=\"${l}\">\"${h(w.subject)}\"</a>`:`\"${h(w.subject)}\"`}\\n${h(w.errorMessage)}`}).join('\\n\\n');\nif(Array.isArray(summary.failedDetails)&&summary.failedDetails.length)text+=`\\n\\n<b>Failure details</b>\\n`+summary.failedDetails.map((f,i)=>{const l=link(f.messageId);return`${i+1}. ${h(f.sender||'unknown')}\\n${l?`<a href=\"${l}\">\"${h(f.subject||'(no subject)')}\"</a>`:`\"${h(f.subject||'(no subject)')}\"`}\\n${h(f.failureStage||f.source||'failed')} — ${h(f.errorMessage||'No error message.')}`}).join('\\n\\n');\nif(Array.isArray(summary.reviewDetails)&&summary.reviewDetails.length)text+=`\\n\\n<b>Review digest</b>\\n`+summary.reviewDetails.map((r,i)=>{const l=link(r.messageId);return`${i+1}. ${h(r.sender)}\\n${l?`<a href=\"${l}\">\"${h(r.subject)}\"</a>`:`\"${h(r.subject)}\"`}\\n${h(r.source)} · ${h(r.confidence)} · ${h(r.hint)} — ${h(r.reasoning)}`}).join('\\n\\n');\nif(Array.isArray(summary.ruleSuggestions)&&summary.ruleSuggestions.length)text+=`\\n\\n<b>Rule suggestions this run</b>\\n`+summary.ruleSuggestions.map(s=>`• ${h(s.sender)} (${s.count}× → /review ${h(s.sender)}, /receipt ${h(s.sender)}, or /whitelist ${h(s.sender)})`).join('\\n');const actions=[];if((summary.needsReview||0)>0)actions.push('• /recent needs-review — inspect uncertain emails');if((summary.failed||0)>0)actions.push('• /recent failed — inspect processing failures');if((summary.warningCount||0)>0)actions.push('• /recent warnings — inspect completed warnings');if(summary.batchSaturated)actions.push('• Increase GMAIL_BATCH_SIZE or run again');if((summary.completed||0)>0)actions.push('• /stats — find repeated review senders');if(actions.length)text+=`\\n\\n<b>Next actions</b>\\n`+actions.join('\\n');if(summary.errorMessage)text+=`\\n\\n<b>Note:</b> ${h(summary.errorMessage)}`;if(dbError)text+=`\\n\\n⚠️ Run finished logically, but DB final update failed.`;return[{json:{chatId:$env.TELEGRAM_CHAT_ID,text:clampTelegram(text)}}];"
+      },
+      "id": "6422c7c1-0229-4053-923d-fb6901d8e48e",
+      "name": "Format Telegram Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3300, -40]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "5fbdd418-1de1-451c-9989-27d2bcd13d11",
+      "name": "Send Telegram Summary",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [3520, -40],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "68b58b3d-0b7d-4a8e-b466-a9d45b0e8720",
+      "name": "Send Immediate Telegram Notice",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [880, 160],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
     }
   ],
-  "pinData": {},
   "connections": {
-    "Daily Schedule": {
+    "Daily Schedule 6AM Manila": {
       "main": [
         [
           {
@@ -560,7 +379,18 @@
         ],
         [
           {
-            "node": "Build No Work Summary",
+            "node": "Build Env Error Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Env Error Summary": {
+      "main": [
+        [
+          {
+            "node": "Send Immediate Telegram Notice",
             "type": "main",
             "index": 0
           }
@@ -569,13 +399,6 @@
     },
     "Simple Run Guard Query": {
       "main": [
-        [
-          {
-            "node": "Evaluate Run Guard",
-            "type": "main",
-            "index": 0
-          }
-        ],
         [
           {
             "node": "Evaluate Run Guard",
@@ -600,7 +423,7 @@
       "main": [
         [
           {
-            "node": "Build No Work Summary",
+            "node": "Build Skipped Summary",
             "type": "main",
             "index": 0
           }
@@ -608,6 +431,17 @@
         [
           {
             "node": "Mark Run Started",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Skipped Summary": {
+      "main": [
+        [
+          {
+            "node": "Send Immediate Telegram Notice",
             "type": "main",
             "index": 0
           }
@@ -622,13 +456,6 @@
             "type": "main",
             "index": 0
           }
-        ],
-        [
-          {
-            "node": "Build No Work Summary",
-            "type": "main",
-            "index": 0
-          }
         ]
       ]
     },
@@ -636,68 +463,14 @@
       "main": [
         [
           {
-            "node": "Validate Labels And Build Map",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Validate Labels And Build Map",
+            "node": "Get Sender Rules",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Validate Labels And Build Map": {
-      "main": [
-        [
-          {
-            "node": "Labels OK?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Labels OK?": {
-      "main": [
-        [
-          {
-            "node": "Load Sender Rules",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Build No Work Summary",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Load Sender Rules": {
-      "main": [
-        [
-          {
-            "node": "Pack Sender Rules",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Pack Sender Rules",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Pack Sender Rules": {
+    "Get Sender Rules": {
       "main": [
         [
           {
@@ -710,13 +483,6 @@
     },
     "Fetch Inbox Emails": {
       "main": [
-        [
-          {
-            "node": "Normalize Emails And Apply Rules",
-            "type": "main",
-            "index": 0
-          }
-        ],
         [
           {
             "node": "Normalize Emails And Apply Rules",
@@ -737,15 +503,55 @@
         ]
       ]
     },
-    "Call Single Email Processor": {
+    "No Work?": {
       "main": [
         [
           {
-            "node": "Normalize Child Result",
+            "node": "Build No Work Summary",
             "type": "main",
             "index": 0
           }
         ],
+        [
+          {
+            "node": "Split Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build No Work Summary": {
+      "main": [
+        [
+          {
+            "node": "Mark Run Finished",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Emails": {
+      "main": [
+        [
+          {
+            "node": "Call Single Email Processor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Final Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Single Email Processor": {
+      "main": [
         [
           {
             "node": "Normalize Child Result",
@@ -759,7 +565,25 @@
       "main": [
         [
           {
+            "node": "Used Gemini?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Used Gemini?": {
+      "main": [
+        [
+          {
             "node": "Wait Between Emails",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Split Emails",
             "type": "main",
             "index": 0
           }
@@ -788,44 +612,8 @@
         ]
       ]
     },
-    "Build No Work Summary": {
-      "main": [
-        [
-          {
-            "node": "Should Skip Mark Finished?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Should Skip Mark Finished?": {
-      "main": [
-        [
-          {
-            "node": "Format Telegram Summary",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Mark Run Finished",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Mark Run Finished": {
       "main": [
-        [
-          {
-            "node": "Format Telegram Summary",
-            "type": "main",
-            "index": 0
-          }
-        ],
         [
           {
             "node": "Format Telegram Summary",
@@ -845,79 +633,18 @@
           }
         ]
       ]
-    },
-    "Split Emails": {
-      "main": [
-        [
-          {
-            "node": "Build Final Summary",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Call Single Email Processor",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "No Work?": {
-      "main": [
-        [
-          {
-            "node": "Build No Work Summary",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Split Emails",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
     }
   },
-  "active": true,
+  "pinData": {},
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate"
+    "binaryMode": "separate",
+    "timezone": "Asia/Manila",
+    "saveExecutionProgress": true,
+    "executionTimeout": 1800
   },
-  "versionId": "f0733cc8-c3e2-46f2-9674-f0167968643e",
-  "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "22da58545622faa6c02ad360173659ae50818de9a11aee046593ea6a8484167e"
-  },
-  "id": "IT3YjYybdU17ePfY",
-  "tags": [
-    {
-      "updatedAt": "2026-05-23T13:31:34.608Z",
-      "createdAt": "2026-05-23T13:31:34.608Z",
-      "id": "CudxntHEWCORZbsl",
-      "name": "gmail"
-    },
-    {
-      "updatedAt": "2026-05-23T13:31:34.610Z",
-      "createdAt": "2026-05-23T13:31:34.610Z",
-      "id": "IPOda0BO6Kst71j0",
-      "name": "v2.6-lean"
-    },
-    {
-      "updatedAt": "2026-05-23T13:31:34.598Z",
-      "createdAt": "2026-05-23T13:31:34.598Z",
-      "id": "Wb42Dfyl9vpWd09s",
-      "name": "shiny-gmail-automation"
-    },
-    {
-      "updatedAt": "2026-05-23T13:31:34.613Z",
-      "createdAt": "2026-05-23T13:31:34.613Z",
-      "id": "hUdE7j63Qk2njDGf",
-      "name": "daily-orchestrator"
-    }
-  ]
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "versionId": "v4.0-lean-generated"
 }

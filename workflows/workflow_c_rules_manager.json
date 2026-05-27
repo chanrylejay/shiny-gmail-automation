@@ -1,244 +1,34 @@
 {
-  "name": "Shiny Gmail Lightweight Telegram Rules Manager V2.6 Lean",
+  "name": "Shiny Gmail Lightweight Telegram Rules Manager V4.0 Lean",
   "nodes": [
     {
       "parameters": {
-        "updates": [
-          "message"
-        ],
-        "additionalFields": {}
+        "updates": ["message"]
       },
-      "id": "5cea9e14-4061-4854-bd6a-3e0b8d056c68",
-      "name": "Telegram Rules Trigger",
+      "id": "785807e3-d13f-4f66-85f8-106fd7217819",
+      "name": "Telegram Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
       "typeVersion": 1.2,
-      "position": [
-        -256,
-        384
-      ],
-      "webhookId": "0103e4fc-73e7-4225-9e8c-b0fc622f6366",
-      "credentials": {
-        "telegramApi": {
-          "id": "TCdrbXaZitj2IHZF",
-          "name": "Shiny Gmail TG"
-        }
-      }
+      "position": [0, 0]
     },
     {
       "parameters": {
-        "jsCode": "// Purpose: Lightweight personal Telegram rules manager for Shiny Gmail.\n// V2.6: Added /unreceipt, /unreview. Dynamic help text for domain vs sender commands.\nconst update = $input.first()?.json || {};\nconst message = update.message || update;\nconst chat = message.chat || {};\nconst from = message.from || {};\nconst account = $env.GMAIL_ACCOUNT || 'primary';\nconst allowedChatId = String($env.TELEGRAM_CHAT_ID || '');\nconst chatId = String(chat.id || message.chat_id || '');\nconst chatType = String(chat.type || 'private');\nconst allowGroups = String($env.TELEGRAM_ALLOW_GROUP_RULES || 'false') === 'true';\nconst telegramUserId = String(from.id || '');\nconst telegramUsername = from.username || '';\nconst text = String(message.text || '').trim();\nfunction out(extra) { return [{ json: { account, chatId, chatType, telegramUserId, telegramUsername, rawText: text, ...extra } }]; }\nif (!allowedChatId) return out({ allowed: false, action: 'reply', replyText: '\\ud83d\\udea8 TELEGRAM_CHAT_ID is missing. Rules Manager is locked.' });\nif (chatId !== allowedChatId) return out({ allowed: false, action: 'reply', replyText: '\\u26d4 Unauthorized.' });\nif (chatType !== 'private' && !allowGroups) return out({ allowed: false, action: 'reply', replyText: '\\u26d4 Rules Manager only accepts private chat commands.' });\nif (!text) return out({ allowed: true, action: 'reply', replyText: 'Send /help for commands.' });\nconst parts = text.split(/\\s+/);\nconst command = String(parts[0] || '').toLowerCase();\nconst value = String(parts[1] || '').toLowerCase().trim();\nconst validEmail = /^[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}$/i;\nconst validDomain = /^[a-z0-9.-]+\\.[a-z]{2,}$/i;\nconst helpText = '\\ud83e\\uddf9 Shiny Gmail Manager\\n\\n' +\n  '<b>Sender rules</b> (e.g. mail@example.com)\\n' +\n  '/whitelist \\u2192 priority\\n' +\n  '/blacklist \\u2192 unimportant\\n' +\n  '/receipt \\u2192 receipts\\n' +\n  '/review \\u2192 please-review\\n' +\n  '/unwhitelist /unblacklist /unreceipt /unreview\\n\\n' +\n  '<b>Domain rules</b> (e.g. example.com)\\n' +\n  '/whitelistdomain \\u2192 priority\\n' +\n  '/blacklistdomain \\u2192 unimportant\\n' +\n  '/unwhitelistdomain /unblacklistdomain\\n\\n' +\n  '<b>View</b>\\n/rules';\nif (command === '/help' || command === '/start') return out({ allowed: true, action: 'help', replyText: helpText });\nif (command === '/rules') return out({ allowed: true, action: 'list' });\nconst upsertMap = {\n  '/whitelist': { ruleType: 'whitelist', matchType: 'exact_sender', priority: 10 },\n  '/blacklist': { ruleType: 'blacklist', matchType: 'exact_sender', priority: 10 },\n  '/receipt': { ruleType: 'force_receipts', matchType: 'exact_sender', priority: 10 },\n  '/review': { ruleType: 'force_review', matchType: 'exact_sender', priority: 10 },\n  '/whitelistdomain': { ruleType: 'whitelist', matchType: 'domain', priority: 20 },\n  '/blacklistdomain': { ruleType: 'blacklist', matchType: 'domain', priority: 20 }\n};\nconst disableMap = {\n  '/unwhitelist': { ruleType: 'whitelist', matchType: 'exact_sender' },\n  '/unblacklist': { ruleType: 'blacklist', matchType: 'exact_sender' },\n  '/unreceipt': { ruleType: 'force_receipts', matchType: 'exact_sender' },\n  '/unreview': { ruleType: 'force_review', matchType: 'exact_sender' },\n  '/unwhitelistdomain': { ruleType: 'whitelist', matchType: 'domain' },\n  '/unblacklistdomain': { ruleType: 'blacklist', matchType: 'domain' }\n};\nif (upsertMap[command]) {\n  const mapped = upsertMap[command];\n  const example = mapped.matchType === 'domain' ? 'example.com' : 'email@example.com';\n  if (!value) return out({ allowed: true, action: 'reply', replyText: `Missing value. Example: ${command} ${example}` });\n  if (mapped.matchType === 'exact_sender' && !validEmail.test(value)) return out({ allowed: true, action: 'reply', replyText: 'Invalid email format.' });\n  if (mapped.matchType === 'domain' && !validDomain.test(value.replace(/^@/, ''))) return out({ allowed: true, action: 'reply', replyText: 'Invalid domain format.' });\n  return out({ allowed: true, action: 'upsert', senderPattern: mapped.matchType === 'domain' ? value.replace(/^@/, '') : value, matchType: mapped.matchType, ruleType: mapped.ruleType, priority: mapped.priority, notes: `Telegram command ${command}` });\n}\nif (disableMap[command]) {\n  const mapped = disableMap[command];\n  const example = mapped.matchType === 'domain' ? 'example.com' : 'email@example.com';\n  if (!value) return out({ allowed: true, action: 'reply', replyText: `Missing value. Example: ${command} ${example}` });\n  if (mapped.matchType === 'exact_sender' && !validEmail.test(value)) return out({ allowed: true, action: 'reply', replyText: 'Invalid email format.' });\n  if (mapped.matchType === 'domain' && !validDomain.test(value.replace(/^@/, ''))) return out({ allowed: true, action: 'reply', replyText: 'Invalid domain format.' });\n  return out({ allowed: true, action: 'disable', senderPattern: mapped.matchType === 'domain' ? value.replace(/^@/, '') : value, matchType: mapped.matchType, ruleType: mapped.ruleType });\n}\nreturn out({ allowed: true, action: 'reply', replyText: 'Unknown command. Send /help.' });"
+        "jsCode": "const update=$input.first()?.json||{};const message=update.message||update;const chat=message.chat||{};const text=String(message.text||'').trim();\nconst allowedChatId=String($env.TELEGRAM_CHAT_ID||'').trim();const chatId=String(chat.id||'').trim();const authorized=Boolean(allowedChatId&&chatId===allowedChatId);\nfunction normPattern(s){return String(s||'').trim().toLowerCase()}function isEmail(s){return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(s)}function isDomain(s){return /^[a-z0-9.-]+\\.[a-z]{2,}$/i.test(s)&&!s.includes('@')}function extractDomain(s){return String(s||'').toLowerCase().split('@').pop()}function categoryForRuleType(t){t=String(t||'').toLowerCase();if(t==='whitelist')return'priority';if(t==='blacklist')return'unimportant';if(['receipt','force_receipts','finance','force_finance'].includes(t))return'finances';if(['review','force_review'].includes(t))return'needs-review';return t||'unknown'}\nconst parts=text.split(/\\s+/).filter(Boolean);const cmd=(parts[0]||'').toLowerCase().replace(/@\\S+$/,'');const arg=normPattern(parts[1]||'');\nlet action='fallback',ruleType=null,matchType='exact',senderPattern=arg,valid=true,validationError=null,recentCategory=null,recentCount=5,statsDays=7,recentFilter=null,recentSenderPattern=null,recentIsDomain=false,rulesFilter=null;\nconst validCats=new Set(['priority','finances','accounts-subscriptions','account-security','unimportant','needs-review']);\nconst addMap={'/whitelist':'whitelist','/blacklist':'blacklist','/receipt':'force_finance','/review':'force_review','/whitelistdomain':'whitelist','/blacklistdomain':'blacklist','/receiptdomain':'force_finance','/reviewdomain':'force_review'};\nconst removeMap={'/unwhitelist':'whitelist','/unblacklist':'blacklist','/unreceipt':'force_finance','/unreview':'force_review','/unwhitelistdomain':'whitelist','/unblacklistdomain':'blacklist','/unreceiptdomain':'force_finance','/unreviewdomain':'force_review'};\nif(!authorized)action='unauthorized';\nelse if(cmd==='/help'||cmd==='/start')action='help';\nelse if(cmd==='/rules'){action='rules';rulesFilter=arg||null;}\nelse if(cmd==='/stats'){action='stats';const n=Number(arg||7);statsDays=Number.isFinite(n)?Math.min(Math.max(Math.trunc(n),1),90):7;}\nelse if(cmd==='/recent'){\n action='recent';\n if(arg==='failed'){recentFilter='status';recentCount=Number.isFinite(Number(parts[2]))?Math.min(Math.max(Math.trunc(Number(parts[2])),1),20):5;}\n else if(arg==='warnings'||arg==='warned'){recentFilter='warnings';recentCount=Number.isFinite(Number(parts[2]))?Math.min(Math.max(Math.trunc(Number(parts[2])),1),20):5;}\n else if(validCats.has(arg)){recentCategory=arg;const n=Number(normPattern(parts[2]||'5'));recentCount=Number.isFinite(n)?Math.min(Math.max(Math.trunc(n),1),20):5;}\n else if(isEmail(arg)||isDomain(arg)){recentFilter='sender';recentSenderPattern=arg;recentIsDomain=isDomain(arg)&&!isEmail(arg);const n=Number(normPattern(parts[2]||'5'));recentCount=Number.isFinite(n)?Math.min(Math.max(Math.trunc(n),1),20):5;}\n else if(arg&&!Number.isNaN(Number(arg))){recentCount=Math.min(Math.max(Math.trunc(Number(arg)),1),20);}else if(arg){valid=false;validationError='For /recent, use /recent, /recent failed, /recent warnings, /recent 10, /recent needs-review, /recent sender@example.com, or /recent example.com 10.';}\n}\nelse if(cmd==='/explain'){action='explain';if(!arg){valid=false;validationError='Please provide an email or domain.'}else if(!(isEmail(arg)||isDomain(arg))){valid=false;validationError='Please provide a valid email or domain.'}}\nelse if(addMap[cmd]){action='add_rule';ruleType=addMap[cmd];matchType=cmd.endsWith('domain')?'domain':'exact';if(matchType==='exact'&&!isEmail(arg)){valid=false;validationError='Please provide a valid email address.'}if(matchType==='domain'&&!isDomain(arg)){valid=false;validationError='Please provide a valid domain, for example example.com.'}}\nelse if(removeMap[cmd]){action='remove_rule';ruleType=removeMap[cmd];matchType=cmd.endsWith('domain')?'domain':'exact';if(matchType==='exact'&&!isEmail(arg)){valid=false;validationError='Please provide a valid email address.'}if(matchType==='domain'&&!isDomain(arg)){valid=false;validationError='Please provide a valid domain, for example example.com.'}}\nconst explainDomain=isEmail(arg)?extractDomain(arg):arg;return[{json:{authorized,chatId,text,cmd,arg,action,valid,validationError,account:$env.GMAIL_ACCOUNT||'primary',senderPattern,matchType,ruleType,categoryLabel:categoryForRuleType(ruleType),explainInput:arg,explainDomain,explainInputType:isEmail(arg)?'email':(isDomain(arg)?'domain':'unknown'),recentCategory,recentCount,recentFilter,recentSenderPattern,recentIsDomain,statsDays,rulesFilter}}];"
       },
-      "id": "7cb4ad3d-3892-43b1-bb35-cf84ab69604a",
+      "id": "11d872bb-5d26-460f-95c3-6d967c248ab6",
       "name": "Parse And Authorize Command",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        -32,
-        384
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Purpose: Format simple replies (help + fallback) for Telegram.\n// V2.6: Merged Format Help Reply + Format Generic Reply into one node.\nfunction tg(s) { s = String(s ?? ''); return s.length <= 3900 ? s : s.slice(0, 3900) + '\\n\\n[...truncated]'; }\nreturn [{ json: { chatId: $json.chatId, account: $json.account || $env.GMAIL_ACCOUNT || 'primary', text: tg($json.replyText || 'Send /help for commands.') } }];"
-      },
-      "id": "d08b8472-38b8-4e0c-b056-8475a4719fb5",
-      "name": "Format Simple Reply",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        416,
-        192
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT sender_pattern, match_type, rule_type, priority\nFROM gmail_sender_rules\nWHERE account = $1\n  AND enabled = true\nORDER BY match_type ASC, rule_type ASC, priority ASC, sender_pattern ASC\nLIMIT 100;",
-        "options": {
-          "connectionTimeout": 10,
-          "delayClosingIdleConnection": 5,
-          "queryReplacement": "={{ [$json.account] }}"
-        }
-      },
-      "id": "51cf876f-bce5-46f8-bc6b-9a63161f5fec",
-      "name": "List Sender Rules",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        416,
-        352
-      ],
-      "alwaysOutputData": true,
-      "credentials": {
-        "postgres": {
-          "id": "zFjqWCSydNofNA6f",
-          "name": "Shiny Gmail Postgres"
-        }
-      },
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "function h(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction tg(s) { s = String(s ?? ''); return s.length <= 3900 ? s : s.slice(0, 3900) + '\\n\\n[...truncated]'; }\nconst cmd = $('Parse And Authorize Command').first()?.json || {};\nconst first = $input.first()?.json || {};\nif (first.error) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '⚠️ Failed to load rules.' } }];\nconst rows = $input.all().map(i => i.json || {}).filter(r => r.sender_pattern);\nif (!rows.length) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '📋 <b>Your Gmail Rules</b>\\n\\nNo active rules yet.' } }];\nconst groups = { whitelist: [], blacklist: [], force_receipts: [], force_review: [] };\nfor (const r of rows) {\n  const line = `• ${h(r.sender_pattern)} <i>(${h(r.match_type)})</i>`;\n  if (!groups[r.rule_type]) groups[r.rule_type] = [];\n  groups[r.rule_type].push(line);\n}\nconst text = `📋 <b>Your Gmail Rules</b>\\n\\n` +\n  `<b>Whitelist → priority</b>\\n${groups.whitelist.length ? groups.whitelist.join('\\n') : 'None'}\\n\\n` +\n  `<b>Blacklist → unimportant</b>\\n${groups.blacklist.length ? groups.blacklist.join('\\n') : 'None'}\\n\\n` +\n  `<b>Receipts</b>\\n${groups.force_receipts.length ? groups.force_receipts.join('\\n') : 'None'}\\n\\n` +\n  `<b>Please-review</b>\\n${groups.force_review.length ? groups.force_review.join('\\n') : 'None'}`;\nreturn [{ json: { chatId: cmd.chatId, account: cmd.account, text: tg(text) } }];"
-      },
-      "id": "b5f5cb3b-bb1d-48b3-9d94-bd8b80e4e32c",
-      "name": "Format Rules List",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        624,
-        352
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "INSERT INTO gmail_sender_rules (\n  account,\n  sender_pattern,\n  match_type,\n  rule_type,\n  priority,\n  enabled,\n  notes,\n  created_at,\n  updated_at\n)\nVALUES ($1,$2,$3,$4,$5::int,true,$6,now(),now())\nON CONFLICT (account, sender_pattern, match_type, rule_type)\nDO UPDATE SET\n  enabled = true,\n  priority = EXCLUDED.priority,\n  notes = EXCLUDED.notes,\n  updated_at = now()\nRETURNING sender_pattern, match_type, rule_type, enabled;",
-        "options": {
-          "connectionTimeout": 10,
-          "delayClosingIdleConnection": 5,
-          "queryReplacement": "={{ [$json.account, $json.senderPattern, $json.matchType, $json.ruleType, $json.priority, $json.notes] }}"
-        }
-      },
-      "id": "92af3a3e-450c-4633-8090-51036c4d6d8e",
-      "name": "Upsert Sender Rule",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        416,
-        528
-      ],
-      "credentials": {
-        "postgres": {
-          "id": "zFjqWCSydNofNA6f",
-          "name": "Shiny Gmail Postgres"
-        }
-      },
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "function h(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction tg(s) { s = String(s ?? ''); return s.length <= 3900 ? s : s.slice(0, 3900) + '\\n\\n[...truncated]'; }\nconst cmd = $('Parse And Authorize Command').first()?.json || {};\nconst row = $input.first()?.json || {};\nif (row.error) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '⚠️ Failed to save rule.' } }];\nconst category = row.rule_type === 'whitelist' ? 'priority' : row.rule_type === 'blacklist' ? 'unimportant' : row.rule_type === 'force_receipts' ? 'receipts' : 'please-review';\nconst text = `✅ <b>Rule saved</b>\\n\\nPattern: ${h(row.sender_pattern)}\\nMatch: ${h(row.match_type)}\\nRule: ${h(row.rule_type)}\\nFuture category: ${h(category)}`;\nreturn [{ json: { chatId: cmd.chatId, account: cmd.account, text: tg(text) } }];"
-      },
-      "id": "f942e0e5-d43d-4cc0-b9fe-a52ee505fcc1",
-      "name": "Format Upsert Reply",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        624,
-        528
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "UPDATE gmail_sender_rules\nSET enabled = false,\n    updated_at = now()\nWHERE account = $1\n  AND sender_pattern = $2\n  AND match_type = $3\n  AND rule_type = $4\nRETURNING sender_pattern, match_type, rule_type, enabled;",
-        "options": {
-          "connectionTimeout": 10,
-          "delayClosingIdleConnection": 5,
-          "queryReplacement": "={{ [$json.account, $json.senderPattern, $json.matchType, $json.ruleType] }}"
-        }
-      },
-      "id": "0f33e0bf-f550-4b65-80f1-4c1d0749fadb",
-      "name": "Disable Sender Rule",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        416,
-        704
-      ],
-      "alwaysOutputData": true,
-      "credentials": {
-        "postgres": {
-          "id": "zFjqWCSydNofNA6f",
-          "name": "Shiny Gmail Postgres"
-        }
-      },
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "function h(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction tg(s) { s = String(s ?? ''); return s.length <= 3900 ? s : s.slice(0, 3900) + '\\n\\n[...truncated]'; }\nconst cmd = $('Parse And Authorize Command').first()?.json || {};\nconst row = $input.first()?.json || {};\nif (row.error) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: '⚠️ Failed to disable rule.' } }];\nif (!row.sender_pattern) return [{ json: { chatId: cmd.chatId, account: cmd.account, text: 'ℹ️ No matching active rule found to disable.' } }];\nconst text = `✅ <b>Rule disabled</b>\\n\\nPattern: ${h(row.sender_pattern)}\\nMatch: ${h(row.match_type)}\\nRule: ${h(row.rule_type)}`;\nreturn [{ json: { chatId: cmd.chatId, account: cmd.account, text: tg(text) } }];"
-      },
-      "id": "9fda1875-95e6-4722-8b0b-6fa68d199e3b",
-      "name": "Format Disable Reply",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        624,
-        704
-      ]
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $json.chatId }}",
-        "text": "={{ $json.text }}",
-        "additionalFields": {
-          "parse_mode": "HTML"
-        }
-      },
-      "id": "020ea7ea-240e-441b-ba6b-a9895f927828",
-      "name": "Send Telegram Reply",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        1008,
-        512
-      ],
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 3000,
-      "webhookId": "21e80411-192a-49ee-8720-b343849b7897",
-      "credentials": {
-        "telegramApi": {
-          "id": "TCdrbXaZitj2IHZF",
-          "name": "Shiny Gmail TG"
-        }
-      },
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "content": "🔒 **Auth & Security (V2.6)**\n\n• TELEGRAM_CHAT_ID must match incoming chat\n• Private chat only (unless TELEGRAM_ALLOW_GROUP_RULES=true)\n• All inputs validated before any DB operation\n• Parameterized Postgres queries only — no SQL injection risk\n\nV2.6: IF chain replaced with Switch node. Format Simple Reply merges help+fallback.",
-        "height": 250,
-        "width": 400
-      },
-      "id": "6a9ff9bc-8c9f-4a25-a7f0-27e126f87794",
-      "name": "Note: Auth Model",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -192,
-        -32
-      ]
-    },
-    {
-      "parameters": {
-        "content": "📋 **Rule Mapping (V2.6)**\n\nwhitelist → priority\nblacklist → unimportant\nreceipt / force_receipts → receipts\nreview / force_review → please-review\n\nMatch types: exact_sender, domain\n\nV2.6: Added /unreceipt and /unreview.\nDynamic help text shows correct example per command type.",
-        "height": 260,
-        "width": 360
-      },
-      "id": "64a5e6ee-c9a7-4fb4-9d90-76ce44a1c181",
-      "name": "Note: Rule Mapping",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        736,
-        -16
-      ]
+      "position": [220, 0]
     },
     {
       "parameters": {
         "rules": {
           "values": [
             {
+              "outputKey": "help",
+              "renameOutput": true,
               "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 3
-                },
                 "conditions": [
                   {
                     "leftValue": "={{ $json.action }}",
@@ -246,109 +36,330 @@
                     "operator": {
                       "type": "string",
                       "operation": "equals"
-                    },
-                    "id": "7a4d1146-e0bc-4200-a8db-3a66a7652074"
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "help"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 3
-                },
-                "conditions": [
-                  {
-                    "id": "a5dc939d-d40b-4b9f-a3b2-a50e1846a85b",
-                    "leftValue": "={{ $json.action }}",
-                    "rightValue": "list",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals",
-                      "name": "filter.operator.equals"
                     }
                   }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "list"
+                ]
+              }
             },
             {
+              "outputKey": "unauthorized",
+              "renameOutput": true,
               "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 3
-                },
                 "conditions": [
                   {
-                    "id": "87b16872-6486-42eb-8537-20f1a35e85c4",
                     "leftValue": "={{ $json.action }}",
-                    "rightValue": "upsert",
+                    "rightValue": "unauthorized",
                     "operator": {
                       "type": "string",
-                      "operation": "equals",
-                      "name": "filter.operator.equals"
+                      "operation": "equals"
                     }
                   }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "upsert"
+                ]
+              }
             },
             {
+              "outputKey": "invalid",
+              "renameOutput": true,
               "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 3
-                },
                 "conditions": [
                   {
-                    "id": "873dc142-7a0b-4615-872d-14ff72b03507",
-                    "leftValue": "={{ $json.action }}",
-                    "rightValue": "disable",
+                    "leftValue": "={{ !$json.valid }}",
+                    "rightValue": true,
                     "operator": {
-                      "type": "string",
-                      "operation": "equals",
-                      "name": "filter.operator.equals"
+                      "type": "boolean",
+                      "operation": "equals"
                     }
                   }
-                ],
-                "combinator": "and"
-              },
+                ]
+              }
+            },
+            {
+              "outputKey": "add_rule",
               "renameOutput": true,
-              "outputKey": "disable"
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "add_rule",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "outputKey": "remove_rule",
+              "renameOutput": true,
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "remove_rule",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "outputKey": "rules",
+              "renameOutput": true,
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "rules",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "outputKey": "stats",
+              "renameOutput": true,
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "stats",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "outputKey": "recent",
+              "renameOutput": true,
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "recent",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "outputKey": "explain",
+              "renameOutput": true,
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "explain",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
             }
           ]
         },
         "options": {
-          "fallbackOutput": "extra"
+          "fallbackOutput": "extra",
+          "fallbackOutputName": "unknown_command"
         }
       },
+      "id": "b6ab98eb-6a8b-443a-959d-64a7a1f29a36",
+      "name": "Route Command",
       "type": "n8n-nodes-base.switch",
-      "typeVersion": 3.4,
-      "position": [
-        176,
-        384
-      ],
-      "id": "f2c06b7b-5e59-49ec-8150-823685beb80f",
-      "name": "Route Command"
+      "typeVersion": 3.2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "function h(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}\nfunction clampTelegram(text,max=3900){if(text.length<=max)return text;let cut=text.slice(0,max-180);const lastLt=cut.lastIndexOf('<'),lastGt=cut.lastIndexOf('>');if(lastLt>lastGt)cut=cut.slice(0,lastLt);for(const tag of ['b','i','code','pre','a','s','u']){const opens=(cut.match(new RegExp(`<${tag}[\\\\s>]`,'gi'))||[]).length;const closes=(cut.match(new RegExp(`</${tag}>`,'gi'))||[]).length;for(let i=0;i<opens-closes;i++)cut+=`</${tag}>`;}return cut+'\\n\\n…truncated. Use a narrower command or DB view for full details.';}\nfunction emojiCat(c){const m={'priority':'🔴','finances':'💰','accounts-subscriptions':'🔔','account-security':'🔐','unimportant':'🗑','needs-review':'🔎'};return `${m[c]||''} ${c||'unknown'}`.trim();}\nfunction mapRule(t){if(t==='whitelist')return'priority';if(t==='blacklist')return'unimportant';if(['receipt','force_receipts','finance','force_finance'].includes(t))return'finances';if(['review','force_review'].includes(t))return'needs-review';return t||'unknown';}\nfunction relativeTime(dateStr){const ms=Date.now()-new Date(dateStr||0).getTime();if(!Number.isFinite(ms)||ms<0)return'just now';const min=Math.floor(ms/60000);if(min<1)return'just now';if(min<60)return`${min}m ago`;const hr=Math.floor(min/60);if(hr<24)return`${hr}h ago`;const d=Math.floor(hr/24);if(d<7)return`${d}d ago`;return`${Math.floor(d/7)}w ago`;}const j=$input.first().json;let text='';\nfunction dist(a,b){const d=Array.from({length:a.length+1},(_,i)=>[i]);for(let j=1;j<=b.length;j++)d[0][j]=j;for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return d[a.length][b.length];}\nconst known=['/help','/rules','/stats','/recent','/explain','/whitelist','/blacklist','/receipt','/review','/whitelistdomain','/blacklistdomain','/receiptdomain','/reviewdomain','/unwhitelist','/unblacklist','/unreceipt','/unreview','/unwhitelistdomain','/unblacklistdomain','/unreceiptdomain','/unreviewdomain'];\nif(j.action==='unauthorized')text='Command unavailable.';else if(!j.valid)text=`⚠️ ${h(j.validationError)}\\n\\nSend /help for commands.`;else if(j.action==='help')text=`🧹 <b>Shiny Gmail Manager V4.0</b>\\n\\n<b>Labels</b>\\n🔴 priority = real human conversations\\n💰 finances = money, receipts, billing, loans, shopping\\n🔔 accounts-subscriptions = services/tools/automation notices\\n🔐 account-security = OTPs, login, password reset, account safety\\n🗑 unimportant = clutter\\n🔎 needs-review = automation uncertainty\\n\\n<b>Add sender rules</b>\\n<code>/whitelist boss@example.com</code> → priority\\n<code>/blacklist promo@example.com</code> → unimportant\\n<code>/receipt billing@example.com</code> → finances\\n<code>/review unknown@example.com</code> → needs-review\\n\\n<b>Add domain rules</b>\\n<code>/whitelistdomain company.com</code>\\n<code>/blacklistdomain spamdomain.com</code>\\n<code>/receiptdomain billingvendor.com</code>\\n<code>/reviewdomain ambiguousvendor.com</code>\\n\\n<b>Remove rules</b>\\n<code>/unwhitelist boss@example.com</code>\\n<code>/unblacklist promo@example.com</code>\\n<code>/unreceipt billing@example.com</code>\\n<code>/unreview unknown@example.com</code>\\n<code>/unwhitelistdomain company.com</code>\\n<code>/unblacklistdomain spamdomain.com</code>\\n<code>/unreceiptdomain billingvendor.com</code>\\n<code>/unreviewdomain ambiguousvendor.com</code>\\n\\n<b>Inspect</b>\\n<code>/rules [finances|priority|domain|exact|disabled|all|pattern]</code>\\n<code>/stats [days]</code>\\n<code>/recent</code>\\n<code>/recent failed</code>\\n<code>/recent warnings</code>\\n<code>/recent needs-review 10</code>\\n<code>/recent sender@example.com 5</code>\\n<code>/recent example.com 10</code>\\n<code>/explain sender@example.com</code>`;else{const typed=j.cmd||'';const best=known.map(c=>[c,dist(typed,c)]).sort((a,b)=>a[1]-b[1])[0];text=best&&best[1]<=3?`Unknown command: ${h(typed)}\\n\\nDid you mean: ${h(best[0])}?\\n\\nSend /help for all commands.`:'Send /help for commands.';}return[{json:{chatId:j.chatId||$env.TELEGRAM_CHAT_ID,text:clampTelegram(text)}}];"
+      },
+      "id": "f28bd1e7-b0bd-4ed8-97a8-c85964453957",
+      "name": "Format Simple Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, -260]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{(()=>{const account=String($json.account).replace(/'/g,\"''\"),pattern=String($json.senderPattern).replace(/'/g,\"''\"),matchType=String($json.matchType).replace(/'/g,\"''\"),ruleType=String($json.ruleType).replace(/'/g,\"''\");return \"WITH disabled AS (UPDATE gmail_sender_rules SET enabled=false, updated_at=NOW() WHERE account='\"+account+\"' AND sender_pattern='\"+pattern+\"' AND match_type='\"+matchType+\"' AND rule_type <> '\"+ruleType+\"' AND enabled=true RETURNING rule_type AS superseded_rule_type), upserted AS (INSERT INTO gmail_sender_rules (account, sender_pattern, match_type, rule_type, priority, enabled, created_at, updated_at) VALUES ('\"+account+\"','\"+pattern+\"','\"+matchType+\"','\"+ruleType+\"',10,true,NOW(),NOW()) ON CONFLICT (account, sender_pattern, match_type, rule_type) DO UPDATE SET enabled=true, updated_at=NOW() RETURNING sender_pattern, match_type, rule_type) SELECT u.sender_pattern, u.match_type, u.rule_type, (SELECT json_agg(disabled.superseded_rule_type) FROM disabled) AS superseded_rule_types FROM upserted u;\";})()}}",
+        "options": {
+          "connectionTimeout": 10,
+          "delayClosingIdleConnection": 5
+        }
+      },
+      "id": "33376884-286c-4fca-b603-2e539b12a719",
+      "name": "Upsert Rule",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [700, -20],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ \"UPDATE gmail_sender_rules SET enabled=false, updated_at=NOW() WHERE account='\"+String($json.account).replace(/'/g,\"''\")+\"' AND sender_pattern='\"+String($json.senderPattern).replace(/'/g,\"''\")+\"' AND match_type='\"+String($json.matchType).replace(/'/g,\"''\")+\"' AND rule_type='\"+String($json.ruleType).replace(/'/g,\"''\")+\"' RETURNING sender_pattern, match_type, rule_type;\" }}",
+        "options": {
+          "connectionTimeout": 10,
+          "delayClosingIdleConnection": 5
+        }
+      },
+      "id": "b0a1202b-6621-4d6c-a975-ec20d3ccb0eb",
+      "name": "Disable Rule",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [700, 120],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function h(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}\nfunction clampTelegram(text,max=3900){if(text.length<=max)return text;let cut=text.slice(0,max-180);const lastLt=cut.lastIndexOf('<'),lastGt=cut.lastIndexOf('>');if(lastLt>lastGt)cut=cut.slice(0,lastLt);for(const tag of ['b','i','code','pre','a','s','u']){const opens=(cut.match(new RegExp(`<${tag}[\\\\s>]`,'gi'))||[]).length;const closes=(cut.match(new RegExp(`</${tag}>`,'gi'))||[]).length;for(let i=0;i<opens-closes;i++)cut+=`</${tag}>`;}return cut+'\\n\\n…truncated. Use a narrower command or DB view for full details.';}\nfunction emojiCat(c){const m={'priority':'🔴','finances':'💰','accounts-subscriptions':'🔔','account-security':'🔐','unimportant':'🗑','needs-review':'🔎'};return `${m[c]||''} ${c||'unknown'}`.trim();}\nfunction mapRule(t){if(t==='whitelist')return'priority';if(t==='blacklist')return'unimportant';if(['receipt','force_receipts','finance','force_finance'].includes(t))return'finances';if(['review','force_review'].includes(t))return'needs-review';return t||'unknown';}\nfunction relativeTime(dateStr){const ms=Date.now()-new Date(dateStr||0).getTime();if(!Number.isFinite(ms)||ms<0)return'just now';const min=Math.floor(ms/60000);if(min<1)return'just now';if(min<60)return`${min}m ago`;const hr=Math.floor(min/60);if(hr<24)return`${hr}h ago`;const d=Math.floor(hr/24);if(d<7)return`${d}d ago`;return`${Math.floor(d/7)}w ago`;}const original=$('Parse And Authorize Command').first().json;const row=$input.first()?.json||{};if(row.error)return[{json:{chatId:original.chatId,text:clampTelegram(`⚠️ Rule change was not saved.\\n\\nDatabase error. No rule was changed.\\n${String(row.error.message||'Try again later.').slice(0,200)}`)}}];const changed=Boolean(row.sender_pattern);const label=original.categoryLabel||mapRule(row.rule_type);let text=original.action==='add_rule'?`✅ Rule saved\\n\\n${original.senderPattern} (${original.matchType}) → ${emojiCat(label)}`:changed?`🗑️ Rule removed\\n\\n${original.senderPattern} (${original.matchType}) → ${emojiCat(label)}`:`ℹ️ Rule not found\\n\\n${original.senderPattern} (${original.matchType}) → ${emojiCat(label)}`;const superseded=row.superseded_rule_types;if(original.action==='add_rule'&&Array.isArray(superseded)&&superseded.length)text+=`\\nSuperseded previous rule(s): ${superseded.map(t=>emojiCat(mapRule(t))).join(', ')}`;return[{json:{chatId:original.chatId,text:clampTelegram(text)}}];"
+      },
+      "id": "3a0615c4-8d36-4133-a144-ee8cbd00e6ab",
+      "name": "Format Rule Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 40]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{(()=>{const account=String($json.account).replace(/'/g,\"''\"),f=String($json.rulesFilter||'').replace(/'/g,\"''\");const like=f.replace(/[\\\\%_]/g,m=>'\\\\'+m);const catMap={priority:[\"whitelist\"],unimportant:[\"blacklist\"],finances:[\"force_finance\",\"finance\",\"receipt\",\"force_receipts\"],\"needs-review\":[\"force_review\",\"review\"]};let where=\" WHERE account='\"+account+\"'\";if(f==='disabled')where+=\" AND enabled=false\";else if(f==='all')where+=\"\";else where+=\" AND enabled=true\";if(f&&f!=='disabled'&&f!=='all'){if(f==='domain'||f==='exact')where+=\" AND match_type='\"+f+\"'\";else if(catMap[f])where+=\" AND rule_type IN (\"+catMap[f].map(x=>\"'\"+x+\"'\").join(',')+\")\";else where+=\" AND sender_pattern ILIKE '%\"+like+\"%' ESCAPE '\\\\'\";}return \"SELECT sender_pattern, match_type, rule_type, priority, enabled FROM gmail_sender_rules\"+where+\" ORDER BY enabled DESC, priority ASC, CASE WHEN match_type='exact' THEN 0 ELSE 1 END, created_at DESC, sender_pattern LIMIT 100;\";})()}}",
+        "options": {
+          "connectionTimeout": 10,
+          "delayClosingIdleConnection": 5
+        }
+      },
+      "id": "ffb2cfd2-ea44-421c-ac95-c1c7cbd44b6b",
+      "name": "Query Rules",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [700, 260],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function h(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}\nfunction clampTelegram(text,max=3900){if(text.length<=max)return text;let cut=text.slice(0,max-180);const lastLt=cut.lastIndexOf('<'),lastGt=cut.lastIndexOf('>');if(lastLt>lastGt)cut=cut.slice(0,lastLt);for(const tag of ['b','i','code','pre','a','s','u']){const opens=(cut.match(new RegExp(`<${tag}[\\\\s>]`,'gi'))||[]).length;const closes=(cut.match(new RegExp(`</${tag}>`,'gi'))||[]).length;for(let i=0;i<opens-closes;i++)cut+=`</${tag}>`;}return cut+'\\n\\n…truncated. Use a narrower command or DB view for full details.';}\nfunction emojiCat(c){const m={'priority':'🔴','finances':'💰','accounts-subscriptions':'🔔','account-security':'🔐','unimportant':'🗑','needs-review':'🔎'};return `${m[c]||''} ${c||'unknown'}`.trim();}\nfunction mapRule(t){if(t==='whitelist')return'priority';if(t==='blacklist')return'unimportant';if(['receipt','force_receipts','finance','force_finance'].includes(t))return'finances';if(['review','force_review'].includes(t))return'needs-review';return t||'unknown';}\nfunction relativeTime(dateStr){const ms=Date.now()-new Date(dateStr||0).getTime();if(!Number.isFinite(ms)||ms<0)return'just now';const min=Math.floor(ms/60000);if(min<1)return'just now';if(min<60)return`${min}m ago`;const hr=Math.floor(min/60);if(hr<24)return`${hr}h ago`;const d=Math.floor(hr/24);if(d<7)return`${d}d ago`;return`${Math.floor(d/7)}w ago`;}const original=$('Parse And Authorize Command').first().json;const first=$input.first()?.json||{};if(first.error)return[{json:{chatId:original.chatId,text:clampTelegram(`⚠️ Database unavailable.\\n\\nCould not load rules safely. Try again later.\\n${String(first.error.message||'').slice(0,200)}`)}}];const rows=$input.all().map(i=>i.json).filter(r=>r.sender_pattern);const exact=rows.filter(r=>r.match_type==='exact'),domains=rows.filter(r=>r.match_type==='domain');const typeCounts={};for(const r of rows){const cat=mapRule(r.rule_type);typeCounts[cat]=(typeCounts[cat]||0)+1;}const comp=Object.entries(typeCounts).map(([cat,n])=>`${emojiCat(cat)}: ${n}`).join(' · ');function line(r){const disabled=r.enabled===false||r.enabled==='false';return`• ${disabled?'⏸️ ':''}${h(r.sender_pattern)} → ${emojiCat(mapRule(r.rule_type))} · p${h(r.priority??10)}${disabled?' (disabled)':''}`;}let text=`📋 <b>Your Gmail Rules</b>${original.rulesFilter?` — ${h(original.rulesFilter)}`:''}\\nExact senders: ${exact.length} · Domains: ${domains.length}`;if(comp)text+=`\\n${h(comp)}`;if(!rows.length)text+='\\n\\nNo rules found for this filter. Send /help for examples.';else{if(exact.length)text+='\\n\\n<b>Exact senders</b>\\n'+exact.map(line).join('\\n');if(domains.length)text+='\\n\\n<b>Domains</b>\\n'+domains.map(line).join('\\n');text+='\\n\\n<i>Rule order: lower priority wins; exact beats domain at same priority; ties use newest first.</i>';}return[{json:{chatId:original.chatId,text:clampTelegram(text)}}];"
+      },
+      "id": "51ca239b-c2b7-41b3-b0ae-26ab741fd3f9",
+      "name": "Format Rules Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 260]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{(()=>{const account=String($json.account).replace(/'/g,\"''\"),days=Math.min(Math.max(Number($json.statsDays||7),1),90);return \"WITH recent AS (SELECT category, source, sender, updated_at, confidence FROM gmail_message_ledger WHERE account='\"+account+\"' AND status='completed' AND updated_at >= NOW() - INTERVAL '\"+days+\" days'), totals AS (SELECT COUNT(*) AS total FROM recent), cats AS (SELECT category, COUNT(*) AS count FROM recent GROUP BY category), sources AS (SELECT source, COUNT(*) AS count FROM recent GROUP BY source), senders AS (SELECT sender, COUNT(*) AS count FROM recent WHERE sender <> '' GROUP BY sender ORDER BY count DESC LIMIT 5), rule_hits AS (SELECT COUNT(*) FILTER (WHERE source NOT IN ('ai','ai_low_confidence','ai_failed')) AS rule_count, COUNT(*) AS total FROM recent), ai_cats AS (SELECT category, COUNT(*) AS count FROM recent WHERE source IN ('ai','ai_low_confidence','ai_failed') GROUP BY category ORDER BY count DESC LIMIT 5), ai_confidence AS (SELECT COALESCE(ROUND(AVG(confidence)::numeric,2),0) AS avg_conf, COALESCE(ROUND(MIN(confidence)::numeric,2),0) AS min_conf, COUNT(*) AS ai_count FROM recent WHERE source IN ('ai','ai_low_confidence')), daily_avg AS (SELECT COALESCE(ROUND(COUNT(*)::numeric / GREATEST(EXTRACT(EPOCH FROM (MAX(updated_at) - MIN(updated_at))) / 86400.0, 1), 1),0) AS avg_per_day, COALESCE(GREATEST(CEIL(EXTRACT(EPOCH FROM (MAX(updated_at) - MIN(updated_at))) / 86400.0), 1)::int,1) AS actual_days FROM recent), review_senders AS (SELECT sender, COUNT(*) AS count FROM recent WHERE category='needs-review' AND sender <> '' GROUP BY sender HAVING COUNT(*) >= 2 ORDER BY count DESC LIMIT 3) SELECT json_build_object('days',\"+days+\",'total',(SELECT total FROM totals),'avg_per_day',(SELECT avg_per_day FROM daily_avg),'actual_days',(SELECT actual_days FROM daily_avg),'categories',(SELECT COALESCE(json_agg(cats),'[]'::json) FROM cats),'sources',(SELECT COALESCE(json_agg(sources),'[]'::json) FROM sources),'top_senders',(SELECT COALESCE(json_agg(senders),'[]'::json) FROM senders),'rule_hits',(SELECT row_to_json(rule_hits) FROM rule_hits),'ai_categories',(SELECT COALESCE(json_agg(ai_cats),'[]'::json) FROM ai_cats),'ai_confidence',(SELECT row_to_json(ai_confidence) FROM ai_confidence),'review_senders',(SELECT COALESCE(json_agg(review_senders),'[]'::json) FROM review_senders)) AS stats;\";})()}}",
+        "options": {
+          "connectionTimeout": 10,
+          "delayClosingIdleConnection": 5
+        }
+      },
+      "id": "42654a75-7d9e-44a8-9637-a440c96e66d6",
+      "name": "Query Stats",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [700, 420],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function h(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}\nfunction clampTelegram(text,max=3900){if(text.length<=max)return text;let cut=text.slice(0,max-180);const lastLt=cut.lastIndexOf('<'),lastGt=cut.lastIndexOf('>');if(lastLt>lastGt)cut=cut.slice(0,lastLt);for(const tag of ['b','i','code','pre','a','s','u']){const opens=(cut.match(new RegExp(`<${tag}[\\\\s>]`,'gi'))||[]).length;const closes=(cut.match(new RegExp(`</${tag}>`,'gi'))||[]).length;for(let i=0;i<opens-closes;i++)cut+=`</${tag}>`;}return cut+'\\n\\n…truncated. Use a narrower command or DB view for full details.';}\nfunction emojiCat(c){const m={'priority':'🔴','finances':'💰','accounts-subscriptions':'🔔','account-security':'🔐','unimportant':'🗑','needs-review':'🔎'};return `${m[c]||''} ${c||'unknown'}`.trim();}\nfunction mapRule(t){if(t==='whitelist')return'priority';if(t==='blacklist')return'unimportant';if(['receipt','force_receipts','finance','force_finance'].includes(t))return'finances';if(['review','force_review'].includes(t))return'needs-review';return t||'unknown';}\nfunction relativeTime(dateStr){const ms=Date.now()-new Date(dateStr||0).getTime();if(!Number.isFinite(ms)||ms<0)return'just now';const min=Math.floor(ms/60000);if(min<1)return'just now';if(min<60)return`${min}m ago`;const hr=Math.floor(min/60);if(hr<24)return`${hr}h ago`;const d=Math.floor(hr/24);if(d<7)return`${d}d ago`;return`${Math.floor(d/7)}w ago`;}const original=$('Parse And Authorize Command').first().json;const first=$input.first()?.json||{};if(first.error)return[{json:{chatId:original.chatId,text:clampTelegram(`⚠️ Database unavailable.\\n\\nCould not load stats safely. Try again later.\\n${String(first.error.message||'').slice(0,200)}`)}}];const data=first.stats||{};function list(arr,key='category',emoji=false){return Array.isArray(arr)&&arr.length?arr.map(x=>`${emoji?emojiCat(x[key]):(x[key]||x.source||x.sender)}: ${x.count}`).join(' | '):'none';}const total=Number(data.total||0),rh=data.rule_hits||{},ruleCount=Number(rh.rule_count||0),pct=total?Math.round(ruleCount/total*100):0,ai=data.ai_confidence||{};let text=`📊 <b>Shiny Gmail Stats</b> — last ${data.days||original.statsDays||7} day(s)\\n\\nTotal processed: ${total}\\nDaily average: ${data.avg_per_day||0} emails/day (over ${data.actual_days||1} actual day(s))\\nCategories: ${list(data.categories||[],'category',true)}\\nSources: ${list(data.sources||[],'source',false)}\\nAI bypass rate: ${pct}% (${ruleCount}/${total} bypassed AI)\\n🤖 AI confidence: avg ${ai.avg_conf??0} · min ${ai.min_conf??0} · across ${ai.ai_count||0} classification(s)\\nTop AI-classified: ${list(data.ai_categories||[],'category',true)}\\nTop senders: ${list(data.top_senders||[],'sender',false)}`;const rs=data.review_senders||[];if(Array.isArray(rs)&&rs.length)text+=`\\n\\n💡 <b>Rule candidates</b> (frequent needs-review)\\n`+rs.map(s=>`• ${h(s.sender)} (${s.count}× → /whitelist, /receipt, or /blacklist)`).join('\\n');return[{json:{chatId:original.chatId,text:clampTelegram(text)}}];"
+      },
+      "id": "03ae3625-29e7-4a96-9057-d623d06d5083",
+      "name": "Format Stats Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 420]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{(()=>{const account=String($json.account).replace(/'/g,\"''\"),limit=Math.min(Math.max(Number($json.recentCount||5),1),20),cat=$json.recentCategory?String($json.recentCategory).replace(/'/g,\"''\"):null,senderPattern=$json.recentSenderPattern?String($json.recentSenderPattern).replace(/'/g,\"''\"):null,isDomain=Boolean($json.recentIsDomain),failed=$json.recentFilter==='status',warned=$json.recentFilter==='warnings';let where=\" WHERE account='\"+account+\"'\";if(warned)where+=\" AND status LIKE 'completed%' AND error_message IS NOT NULL\";else where+=\" AND status='\"+(failed?'failed':'completed')+\"'\";if(cat)where+=\" AND category='\"+cat+\"'\";if(senderPattern)where+=isDomain?\" AND (LOWER(split_part(sender,'@',2))='\"+senderPattern+\"' OR LOWER(split_part(sender,'@',2)) LIKE '%.\"+senderPattern+\"')\":\" AND sender='\"+senderPattern+\"'\";return \"SELECT gmail_message_id, sender, subject, category, source, confidence, reasoning, status, error_message, updated_at FROM gmail_message_ledger\"+where+\" ORDER BY updated_at DESC LIMIT \"+limit+\";\";})()}}",
+        "options": {
+          "connectionTimeout": 10,
+          "delayClosingIdleConnection": 5
+        }
+      },
+      "id": "88541d85-c0e3-473e-994b-ff2dc78383b8",
+      "name": "Query Recent",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [700, 580],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function h(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}\nfunction clampTelegram(text,max=3900){if(text.length<=max)return text;let cut=text.slice(0,max-180);const lastLt=cut.lastIndexOf('<'),lastGt=cut.lastIndexOf('>');if(lastLt>lastGt)cut=cut.slice(0,lastLt);for(const tag of ['b','i','code','pre','a','s','u']){const opens=(cut.match(new RegExp(`<${tag}[\\\\s>]`,'gi'))||[]).length;const closes=(cut.match(new RegExp(`</${tag}>`,'gi'))||[]).length;for(let i=0;i<opens-closes;i++)cut+=`</${tag}>`;}return cut+'\\n\\n…truncated. Use a narrower command or DB view for full details.';}\nfunction emojiCat(c){const m={'priority':'🔴','finances':'💰','accounts-subscriptions':'🔔','account-security':'🔐','unimportant':'🗑','needs-review':'🔎'};return `${m[c]||''} ${c||'unknown'}`.trim();}\nfunction mapRule(t){if(t==='whitelist')return'priority';if(t==='blacklist')return'unimportant';if(['receipt','force_receipts','finance','force_finance'].includes(t))return'finances';if(['review','force_review'].includes(t))return'needs-review';return t||'unknown';}\nfunction relativeTime(dateStr){const ms=Date.now()-new Date(dateStr||0).getTime();if(!Number.isFinite(ms)||ms<0)return'just now';const min=Math.floor(ms/60000);if(min<1)return'just now';if(min<60)return`${min}m ago`;const hr=Math.floor(min/60);if(hr<24)return`${hr}h ago`;const d=Math.floor(hr/24);if(d<7)return`${d}d ago`;return`${Math.floor(d/7)}w ago`;}const original=$('Parse And Authorize Command').first().json;const first=$input.first()?.json||{};if(first.error)return[{json:{chatId:original.chatId,text:clampTelegram(`⚠️ Database unavailable.\\n\\nCould not load recent classifications safely. Try again later.\\n${String(first.error.message||'').slice(0,200)}`)}}];const rows=$input.all().map(i=>i.json).filter(r=>r.gmail_message_id);const failed=original.recentFilter==='status';const warned=original.recentFilter==='warnings';const filter=warned?' — ⚠️ warnings':(failed?' — 🚨 failed':(original.recentCategory?` — ${emojiCat(original.recentCategory)}`:(original.recentSenderPattern?` — ${h(original.recentSenderPattern)}`:'')));function gmailLink(id){return id&&!String(id).startsWith('input_failure_')?`https://mail.google.com/mail/u/0/#all/${encodeURIComponent(id)}`:null;}let text=`📬 <b>Recent Classifications${filter}</b>\\n`;if(!rows.length)text+='\\nNo matching emails found yet.';else text+='\\n'+rows.map((r,i)=>{const link=gmailLink(r.gmail_message_id);const subj=h(r.subject||'(no subject)');const subject=link?`<a href=\"${link}\">${subj}</a>`:subj;if(warned)return`${i+1}. <b>⚠️ warning</b> — ${h(r.sender||'unknown')} · ${relativeTime(r.updated_at)}\\n${subject}\\n${h(r.source||'completed_with_warning')} — ${h(r.error_message||'Completed with warning.')}`;if(failed)return`${i+1}. <b>🚨 failed</b> — ${h(r.sender||'unknown')} · ${relativeTime(r.updated_at)}\\n${subject}\\n${h(r.source||'failed')} — ${h(r.error_message||r.reasoning||'No error message.')}\\nNext: rerun tomorrow, or inspect Gmail label state if this repeats.`;return`${i+1}. <b>${emojiCat(r.category)}</b> — ${h(r.sender||'unknown')} · ${relativeTime(r.updated_at)}\\n${subject}\\n${h(r.source||'unknown')} · confidence ${h(r.confidence??0)}\\n${h(r.reasoning||'')}`}).join('\\n\\n');return[{json:{chatId:original.chatId,text:clampTelegram(text)}}];"
+      },
+      "id": "e211964c-3db9-4faa-aa10-0b1a0d3bb71c",
+      "name": "Format Recent Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 580]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{(()=>{const account=String($json.account).replace(/'/g,\"''\"),input=String($json.explainInput).replace(/'/g,\"''\"),domain=String($json.explainDomain).replace(/'/g,\"''\");return \"WITH rule_matches AS (SELECT sender_pattern, match_type, rule_type, priority, created_at, CASE WHEN sender_pattern='\"+input+\"' THEN 'exact sender match' WHEN match_type='domain' AND '\"+domain+\"'=sender_pattern THEN 'root domain match' WHEN match_type='domain' AND '\"+domain+\"' LIKE '%.' || sender_pattern THEN 'subdomain match' ELSE 'matched' END AS match_reason, CASE WHEN match_type='exact' AND sender_pattern='\"+input+\"' THEN 0 WHEN match_type='domain' AND '\"+domain+\"'=sender_pattern THEN 1 WHEN match_type='domain' AND '\"+domain+\"' LIKE '%.' || sender_pattern THEN 2 ELSE 9 END AS match_strength, NULL::timestamptz AS last_seen, 0 AS hist_count, 0 AS row_type FROM gmail_sender_rules WHERE account='\"+account+\"' AND enabled=true AND (sender_pattern='\"+input+\"' OR (match_type='domain' AND ('\"+domain+\"'=sender_pattern OR '\"+domain+\"' LIKE '%.' || sender_pattern))) ORDER BY priority ASC, match_strength ASC, created_at DESC LIMIT 5), history AS (SELECT NULL::text AS sender_pattern, NULL::text AS match_type, category AS rule_type, NULL::integer AS priority, MAX(updated_at) AS created_at, ('history: ' || source || ' × ' || COUNT(*) || ', conf ' || ROUND(AVG(confidence)::numeric, 2)::text) AS match_reason, 99 AS match_strength, MAX(updated_at) AS last_seen, COUNT(*)::int AS hist_count, 1 AS row_type FROM gmail_message_ledger WHERE account='\"+account+\"' AND status='completed' AND (sender='\"+input+\"' OR LOWER(split_part(sender,'@',2))='\"+domain+\"' OR LOWER(split_part(sender,'@',2)) LIKE '%.\"+domain+\"') GROUP BY category, source ORDER BY COUNT(*) DESC LIMIT 3) SELECT * FROM rule_matches UNION ALL SELECT * FROM history ORDER BY row_type ASC, priority ASC NULLS LAST, match_strength ASC, hist_count DESC, created_at DESC NULLS LAST;\";})()}}",
+        "options": {
+          "connectionTimeout": 10,
+          "delayClosingIdleConnection": 5
+        }
+      },
+      "id": "bf53fdcb-44ee-473b-8a0c-45056bcc40dc",
+      "name": "Query Explain",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [700, 740],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function h(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}\nfunction clampTelegram(text,max=3900){if(text.length<=max)return text;let cut=text.slice(0,max-180);const lastLt=cut.lastIndexOf('<'),lastGt=cut.lastIndexOf('>');if(lastLt>lastGt)cut=cut.slice(0,lastLt);for(const tag of ['b','i','code','pre','a','s','u']){const opens=(cut.match(new RegExp(`<${tag}[\\\\s>]`,'gi'))||[]).length;const closes=(cut.match(new RegExp(`</${tag}>`,'gi'))||[]).length;for(let i=0;i<opens-closes;i++)cut+=`</${tag}>`;}return cut+'\\n\\n…truncated. Use a narrower command or DB view for full details.';}\nfunction emojiCat(c){const m={'priority':'🔴','finances':'💰','accounts-subscriptions':'🔔','account-security':'🔐','unimportant':'🗑','needs-review':'🔎'};return `${m[c]||''} ${c||'unknown'}`.trim();}\nfunction mapRule(t){if(t==='whitelist')return'priority';if(t==='blacklist')return'unimportant';if(['receipt','force_receipts','finance','force_finance'].includes(t))return'finances';if(['review','force_review'].includes(t))return'needs-review';return t||'unknown';}\nfunction relativeTime(dateStr){const ms=Date.now()-new Date(dateStr||0).getTime();if(!Number.isFinite(ms)||ms<0)return'just now';const min=Math.floor(ms/60000);if(min<1)return'just now';if(min<60)return`${min}m ago`;const hr=Math.floor(min/60);if(hr<24)return`${hr}h ago`;const d=Math.floor(hr/24);if(d<7)return`${d}d ago`;return`${Math.floor(d/7)}w ago`;}const original=$('Parse And Authorize Command').first().json;const first=$input.first()?.json||{};if(first.error)return[{json:{chatId:original.chatId,text:clampTelegram(`⚠️ Database unavailable.\\n\\nCould not preview rule matching safely. Try again later.\\n${String(first.error.message||'').slice(0,200)}`)}}];const rows=$input.all().map(i=>i.json);const ruleRows=rows.filter(r=>r.row_type===0&&r.sender_pattern);const historyRows=rows.filter(r=>r.row_type===1);let decision='Gemini will classify using metadata';let text=`🔎 <b>Classification Preview</b>\\n\\nInput: ${h(original.explainInput)}\\n`;if(ruleRows.length){const w=ruleRows[0];decision=`${emojiCat(mapRule(w.rule_type))} via ${w.match_type==='domain'?'domain rule':'exact sender rule'}`;}text+=`<b>Decision today:</b> ${h(decision)}\\n<i>Winner selected by: priority ASC; exact beats domain at same priority; newest rule wins remaining ties.</i>\\n`;if(!ruleRows.length)text+='\\nNo sender rule matches. Gemini will classify using metadata.';else{const w=ruleRows[0];text+=`\\n<b>Winner</b>\\n${h(w.sender_pattern)} (${h(w.match_type)})\\nMatch: ${h(w.match_reason||'matched')}\\nPriority: p${h(w.priority??10)}\\nRule type: ${h(w.rule_type)}\\nFuture category: ${emojiCat(mapRule(w.rule_type))}`;if(ruleRows.length>1){const runner=ruleRows[1];let reason='More recently created rule at same priority';if(Number(w.priority)!==Number(runner.priority))reason=`Lower priority value (p${w.priority} before p${runner.priority})`;else if(w.match_type!==runner.match_type)reason='Exact match beats domain match at same priority';else if(Number(w.match_strength)!==Number(runner.match_strength))reason='More specific domain match wins before broader subdomain/root matches';text+=`\\n\\n<b>Also matched</b>\\n`+ruleRows.slice(1).map((r,i)=>`${i+2}. ${h(r.sender_pattern)} (${h(r.match_type)}) · ${h(r.match_reason||'matched')} · p${h(r.priority??10)} → ${emojiCat(mapRule(r.rule_type))}`).join('\\n')+`\\n⚡ Resolution: ${h(reason)}`;}}\nif(historyRows.length){text+=`\\n\\n<b>Classification history</b>\\n`+historyRows.map(r=>`${emojiCat(r.rule_type)} · ${h(r.match_reason)} · last ${relativeTime(r.last_seen)}`).join('\\n');if(ruleRows.length){const future=mapRule(ruleRows[0].rule_type);const dominant=historyRows[0].rule_type;if(dominant&&future&&dominant!==future)text+=`\\n\\n⚠️ <b>Drift note</b>\\nCurrent winning rule classifies future mail as ${emojiCat(future)}, but recent history is mostly ${emojiCat(dominant)}.`;}}else text+='\\n\\nNo classification history found for this sender/domain.';return[{json:{chatId:original.chatId,text:clampTelegram(text)}}];"
+      },
+      "id": "4062fd69-0c08-4b74-a250-a3bd738c1267",
+      "name": "Format Explain Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 740]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "a63972b3-09d3-42ee-8b6b-284347167e05",
+      "name": "Send Telegram Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1220, 260],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
     }
   ],
-  "pinData": {},
   "connections": {
-    "Telegram Rules Trigger": {
+    "Telegram Trigger": {
       "main": [
         [
           {
@@ -370,104 +381,6 @@
         ]
       ]
     },
-    "Format Simple Reply": {
-      "main": [
-        [
-          {
-            "node": "Send Telegram Reply",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "List Sender Rules": {
-      "main": [
-        [
-          {
-            "node": "Format Rules List",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Format Rules List",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Format Rules List": {
-      "main": [
-        [
-          {
-            "node": "Send Telegram Reply",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Upsert Sender Rule": {
-      "main": [
-        [
-          {
-            "node": "Format Upsert Reply",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Format Upsert Reply",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Format Upsert Reply": {
-      "main": [
-        [
-          {
-            "node": "Send Telegram Reply",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Disable Sender Rule": {
-      "main": [
-        [
-          {
-            "node": "Format Disable Reply",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Format Disable Reply",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Format Disable Reply": {
-      "main": [
-        [
-          {
-            "node": "Send Telegram Reply",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Route Command": {
       "main": [
         [
@@ -479,21 +392,56 @@
         ],
         [
           {
-            "node": "List Sender Rules",
+            "node": "Format Simple Reply",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Upsert Sender Rule",
+            "node": "Format Simple Reply",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Disable Sender Rule",
+            "node": "Upsert Rule",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Disable Rule",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Query Rules",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Query Stats",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Query Recent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Query Explain",
             "type": "main",
             "index": 0
           }
@@ -506,43 +454,149 @@
           }
         ]
       ]
+    },
+    "Upsert Rule": {
+      "main": [
+        [
+          {
+            "node": "Format Rule Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Disable Rule": {
+      "main": [
+        [
+          {
+            "node": "Format Rule Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Rule Result": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Rules": {
+      "main": [
+        [
+          {
+            "node": "Format Rules Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Rules Reply": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Stats": {
+      "main": [
+        [
+          {
+            "node": "Format Stats Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Stats Reply": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Recent": {
+      "main": [
+        [
+          {
+            "node": "Format Recent Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Recent Reply": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Explain": {
+      "main": [
+        [
+          {
+            "node": "Format Explain Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Explain Reply": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Simple Reply": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "active": true,
+  "pinData": {},
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate"
+    "binaryMode": "separate",
+    "saveExecutionProgress": false,
+    "executionTimeout": 300
   },
-  "versionId": "f4bfd2b1-bc27-4eec-ba8c-829b9f63a12a",
-  "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "22da58545622faa6c02ad360173659ae50818de9a11aee046593ea6a8484167e"
-  },
-  "id": "C5I2GRGcoJ3XZhRc",
-  "tags": [
-    {
-      "updatedAt": "2026-05-23T13:31:34.608Z",
-      "createdAt": "2026-05-23T13:31:34.608Z",
-      "id": "CudxntHEWCORZbsl",
-      "name": "gmail"
-    },
-    {
-      "updatedAt": "2026-05-23T13:31:34.610Z",
-      "createdAt": "2026-05-23T13:31:34.610Z",
-      "id": "IPOda0BO6Kst71j0",
-      "name": "v2.6-lean"
-    },
-    {
-      "updatedAt": "2026-05-23T13:31:34.598Z",
-      "createdAt": "2026-05-23T13:31:34.598Z",
-      "id": "Wb42Dfyl9vpWd09s",
-      "name": "shiny-gmail-automation"
-    },
-    {
-      "updatedAt": "2026-05-23T14:22:30.773Z",
-      "createdAt": "2026-05-23T14:22:30.773Z",
-      "id": "u6jiqUBzP0WHNDPn",
-      "name": "telegram-rules-manager"
-    }
-  ]
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "versionId": "v4.0-lean-generated"
 }

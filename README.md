@@ -4,13 +4,13 @@
 
 **Wake up to a cleaner Gmail inbox — every morning.**
 
-[![Version](https://img.shields.io/badge/version-2.6_Lean-blue?style=for-the-badge)](https://github.com/chanrylejay/shiny-gmail-automation)
+[![Version](https://img.shields.io/badge/version-4.0_Lean-blue?style=for-the-badge)](https://github.com/chanrylejay/shiny-gmail-automation)
 [![Workflows](https://img.shields.io/badge/workflows-3-orange?style=for-the-badge)](workflows)
-[![Nodes](https://img.shields.io/badge/nodes-54-purple?style=for-the-badge)](workflows)
+[![Nodes](https://img.shields.io/badge/nodes-60-purple?style=for-the-badge)](workflows)
 [![License](https://img.shields.io/badge/license-MIT-yellow?style=for-the-badge)](LICENSE)
 [![Cost](https://img.shields.io/badge/cost-$0-brightgreen?style=for-the-badge)](https://github.com/chanrylejay/shiny-gmail-automation)
 
-**Shiny Gmail Automation** is a personal inbox-cleaning system built on [n8n](https://n8n.io) that sorts new Gmail messages using AI, applies helpful labels, and sends you a short Telegram summary — all while you sleep.
+**Shiny Gmail Automation** is a personal inbox-cleaning system built on [n8n](https://n8n.io) that sorts new Gmail messages using AI, applies helpful labels, lets you manage sender rules from Telegram, and sends you a short daily summary — all while you sleep.
 
 No monthly subscription. No complicated dashboard. No need to manually clean your inbox every day.
 
@@ -25,12 +25,12 @@ No monthly subscription. No complicated dashboard. No need to manually clean you
 Every morning, your Telegram bot sends you a clean report of what happened overnight:
 
 <div align="center">
-  <img src="docs/assets/telegram-summary.png" alt="Telegram daily summary from Shiny Gmail Cleaner bot showing completed cleanup runs" width="600">
+  <img src="docs/assets/telegram-summary.png" alt="Telegram daily summary from Shiny Gmail Automation showing completed cleanup runs" width="600">
 </div>
 
 <br>
 
-> **What you're seeing:** The bot reports how many emails were found, how many were classified, and whether any need manual review — all delivered before you even open Gmail.
+> **What you're seeing:** The bot reports how many emails were found, how many were classified, whether anything failed, whether anything needs review, and whether more emails may still be waiting in the inbox.
 
 ---
 
@@ -40,11 +40,12 @@ Shiny Gmail Automation checks your new Gmail messages once a day and organizes t
 
 Every morning, it can:
 
-- 📌 Highlight work, banking, OTP, and urgent messages as **priority**
-- 🧾 Label order confirmations and invoices as **receipts**
-- 📬 Tag intentional subscriptions as **email-subs**
-- 📋 Mark newsletters and promotions as **unimportant**
-- 👀 Set unclear messages aside as **please-review**
+- 🔴 Highlight real human conversations and important replies as **priority**
+- 💰 Label receipts, orders, billing, invoices, payments, refunds, and financial records as **finances**
+- 🔔 Tag service updates, subscriptions, platform notices, app alerts, and automation monitoring emails as **accounts-subscriptions**
+- 🔐 Label OTPs, verification codes, sign-in alerts, password resets, and suspicious activity emails as **account-security**
+- 🗑 Mark newsletters, promotions, coupons, cold outreach, and clutter as **unimportant**
+- 🔎 Set unclear or ambiguous messages aside as **needs-review**
 - 📲 Send you a Telegram summary of what happened
 
 Instead of opening Gmail to a messy inbox, you wake up to something already sorted.
@@ -57,18 +58,18 @@ This project is for you if:
 
 - You receive a manageable number of personal emails each day
 - You want Gmail to feel less messy
-- You like the idea of controlling rules from Telegram
+- You like the idea of controlling sender and domain rules from Telegram
 - You are comfortable following a setup guide once
 - You want a free, self-hosted automation instead of another paid app
 
 This project is probably **not** for you if:
 
 - You want a one-click mobile app
-- You do not want to set up n8n, Gmail API access, Telegram, and a database
+- You do not want to set up n8n, Gmail API access, Telegram, Gemini, and a database
 - You need enterprise email compliance features
 - You want the system to delete emails automatically
 
-> Shiny Gmail Automation is designed to **organize**, not destroy. It labels emails. It does not delete your inbox.
+> Shiny Gmail Automation is designed to **organize**, not destroy. It labels and archives emails. It does not permanently delete your inbox.
 
 ---
 
@@ -83,7 +84,7 @@ At 6:00 AM, Shiny Gmail checks your new emails.
 It sees:
 
 - An Amazon order confirmation
-- A bank security alert
+- A bank sign-in alert
 - A random newsletter
 - A work email
 - One confusing email it's not sure about
@@ -92,22 +93,23 @@ Then it labels them:
 
 | Email | Label |
 |---|---|
-| Amazon order | `receipts` |
-| Bank alert | `priority` |
+| Amazon order | `finances` |
+| Bank sign-in alert | `account-security` |
 | Newsletter | `unimportant` |
 | Work email | `priority` |
-| Confusing email | `please-review` |
+| Confusing email | `needs-review` |
 
 Then it sends you a Telegram message:
 
-```
+```text
 🧹 Shiny Gmail Daily Run
 
 5 emails processed
-⭐ 2 priority
-🧾 1 receipt
-📋 1 unimportant
-👀 1 needs review
+🔴 priority: 1
+💰 finances: 1
+🔐 account-security: 1
+🗑 unimportant: 1
+🔎 needs-review: 1
 ```
 
 You open Gmail only when something actually needs your attention.
@@ -116,21 +118,21 @@ You open Gmail only when something actually needs your attention.
 
 ## 🏷️ Gmail Labels Used
 
-Shiny Gmail uses six Gmail labels:
+Shiny Gmail V4.0 uses seven Gmail labels:
 
 | Label | Meaning |
 |---|---|
-| `priority` | Emails you probably care about |
-| `receipts` | Orders, invoices, deliveries, payments, and money records |
-| `email-subs` | Services you intentionally signed up for |
-| `unimportant` | Newsletters, marketing, spam-like messages, or low-priority mail |
-| `please-review` | Messages the system is unsure about |
+| `priority` | Human conversations, important replies, or messages that may need personal attention |
+| `finances` | Receipts, orders, invoices, billing, payments, refunds, statements, tax, payroll, and money records |
+| `accounts-subscriptions` | Platform notices, service updates, subscriptions, app alerts, automation monitoring, quotas, and non-security account messages |
+| `account-security` | OTPs, login alerts, verification codes, password resets, suspicious activity, and account safety messages |
+| `unimportant` | Newsletters, promos, marketing, coupons, surveys, cold outreach, and spam-like clutter |
+| `needs-review` | Messages the system is unsure about or does not want to guess silently |
 | `processed` | A "done" stamp showing the email was already handled |
 
 The most important idea:
 
-> `please-review` is the safety net.
-> If the system is unsure, it asks you instead of guessing silently.
+> `needs-review` is the safety net. If the system is unsure, it asks you instead of guessing silently.
 
 > [!WARNING]
 > Do not create a Gmail label named `important`. Gmail reserves that name as a system label. This project uses `priority` instead.
@@ -139,20 +141,24 @@ The most important idea:
 
 ## ⚡ How It Works
 
-```
-Every morning at 6:00 AM
+```text
+Every morning at 6:00 AM Asia/Manila
 
 Gmail inbox
    ↓
 Find new unprocessed emails
    ↓
-Check your Telegram rules
+Check your Telegram sender/domain rules
    ↓
-If no rule exists → ask Gemini AI to classify
+Reuse safe ledger/thread history when possible
+   ↓
+If no safe shortcut exists → ask Gemini AI to classify
    ↓
 Apply the right Gmail label
    ↓
 Add the processed label
+   ↓
+Archive the email
    ↓
 Send you a Telegram summary
 ```
@@ -161,20 +167,20 @@ The system is made of three n8n workflows:
 
 | Workflow | What It Does |
 |---|---|
-| **Workflow A** — Daily Orchestrator | Finds new emails and starts the cleanup |
+| **Workflow A** — Daily Orchestrator | Finds new emails, batches them safely, calls the child workflow, and sends the daily summary |
 | **Workflow B** — Email Processor | Classifies and labels one email at a time |
-| **Workflow C** — Telegram Rules Manager | Lets you add, remove, and view rules from Telegram |
+| **Workflow C** — Telegram Rules Manager | Lets you add, remove, inspect, and explain rules from Telegram |
 
 ### Architecture
 
-```
+```text
 ┌─────────────┐
-│    Gmail     │
+│    Gmail    │
 └──────┬──────┘
        │
        ▼
 ┌─────────────┐
-│     n8n      │
+│     n8n     │
 └──────┬──────┘
        │
        ├──────────────► Gemini AI
@@ -185,12 +191,12 @@ The system is made of three n8n workflows:
        ├──────────────► Postgres
        │                  │
        │                  ▼
-       │              Rules + audit logs
+       │              Rules + audit ledger
        │
        └──────────────► Telegram Bot
                           │
                           ▼
-                     Summary + commands
+                    Summary + commands
 ```
 
 ---
@@ -203,33 +209,35 @@ You do not need to open n8n every time you want to change a rule. Just message y
 
 Always mark this sender as priority:
 
-```
+```text
 /whitelist boss@company.com
 ```
 
 Always mark this sender as unimportant:
 
-```
+```text
 /blacklist annoying@newsletter.com
 ```
 
-Always mark this sender as receipts:
+Always mark this sender as finances:
 
-```
+```text
 /receipt orders@store.com
 ```
 
-Always send this sender to please-review:
+Always send this sender to needs-review:
 
-```
+```text
 /review weird@example.com
 ```
 
 You can also manage whole domains:
 
-```
+```text
 /whitelistdomain company.com
 /blacklistdomain spammy-site.com
+/receiptdomain billingvendor.com
+/reviewdomain ambiguousvendor.com
 ```
 
 Domain rules also catch subdomains. For example, `/blacklistdomain spammy-site.com` also catches `news.spammy-site.com`, `mail.spammy-site.com`, and `offers.spammy-site.com`.
@@ -238,7 +246,7 @@ Domain rules also catch subdomains. For example, `/blacklistdomain spammy-site.c
 
 #### Add Sender Rules
 
-```
+```text
 /whitelist mail@example.com
 /blacklist mail@example.com
 /receipt mail@example.com
@@ -247,28 +255,63 @@ Domain rules also catch subdomains. For example, `/blacklistdomain spammy-site.c
 
 #### Add Domain Rules
 
-```
+```text
 /whitelistdomain example.com
 /blacklistdomain example.com
+/receiptdomain example.com
+/reviewdomain example.com
 ```
 
-#### Remove Rules
+#### Remove Sender Rules
 
-```
+```text
 /unwhitelist mail@example.com
 /unblacklist mail@example.com
 /unreceipt mail@example.com
 /unreview mail@example.com
+```
+
+#### Remove Domain Rules
+
+```text
 /unwhitelistdomain example.com
 /unblacklistdomain example.com
+/unreceiptdomain example.com
+/unreviewdomain example.com
 ```
 
-#### View Help
+#### Inspect and Explain
 
-```
-/rules
+```text
 /help
+/rules
+/rules finances
+/rules domain
+/rules disabled
+/rules all
+/stats
+/stats 30
+/recent
+/recent failed
+/recent warnings
+/recent needs-review 10
+/recent sender@example.com 5
+/recent example.com 10
+/explain sender@example.com
 ```
+
+### Useful Inspection Commands
+
+| Command | What It Does |
+|---|---|
+| `/rules` | Lists enabled sender/domain rules |
+| `/rules disabled` | Shows disabled rules |
+| `/rules all` | Shows enabled and disabled rules |
+| `/stats [days]` | Shows recent classification stats and AI bypass rate |
+| `/recent` | Shows recently processed emails |
+| `/recent failed` | Shows failed processing attempts |
+| `/recent warnings` | Shows completed emails that had warnings, such as archive warnings |
+| `/explain sender@example.com` | Explains which rule/history would affect a sender or domain |
 
 ---
 
@@ -278,7 +321,7 @@ Shiny Gmail Automation is designed to be careful.
 
 ### It does not delete emails
 
-The system labels messages. It does not permanently delete your mail.
+The system labels messages and removes them from the inbox after processing. It does not permanently delete your mail.
 
 ### It does not send emails
 
@@ -290,7 +333,7 @@ If you create a rule, that rule wins.
 
 For example:
 
-```
+```text
 /whitelist boss@company.com
 ```
 
@@ -298,18 +341,23 @@ For example:
 
 ### If AI is unsure, the email goes to review
 
-If Gemini fails, times out, returns something invalid, or cannot confidently classify the email, the message goes to `please-review`. That means you stay in control.
+If Gemini fails, times out, returns something invalid, has low confidence, or cannot classify safely, the message goes to `needs-review`. That means you stay in control.
 
-### It only needs lightweight email information
+### It only uses lightweight email information
 
 The workflow is designed around email metadata:
 
 - Sender
+- To / CC context
 - Subject
 - Date
 - Gmail snippet (a short preview provided by Gmail)
 
 > Avoid using this project if you are uncomfortable with an AI classifier seeing preview text from your emails.
+
+### Email metadata is treated as untrusted
+
+The Gemini prompt explicitly treats email metadata as untrusted external data. This helps reduce prompt-injection risk from malicious subjects or snippets.
 
 ### Gmail labels are the source of truth
 
@@ -330,7 +378,7 @@ You will need accounts or access for:
 - **Telegram** — for rule management and daily summaries
 - **Google AI Studio / Gemini API** — for AI email classification
 - **Neon Postgres** (or another Postgres database) — stores rules and audit logs
-- **ngrok** (or another HTTPS tunnel) — for Telegram webhooks
+- **ngrok** (or another HTTPS tunnel) — for Telegram webhooks if you self-host locally
 
 > [!NOTE]
 > Telegram webhooks require HTTPS. If you run n8n locally on `http://localhost`, you need an HTTPS tunnel like ngrok. The free tier is enough for personal use.
@@ -348,12 +396,13 @@ This is the short version. For full step-by-step instructions, read the **[Deplo
 
 In Gmail, create these labels:
 
-```
+```text
 priority
-receipts
-email-subs
+finances
+accounts-subscriptions
+account-security
 unimportant
-please-review
+needs-review
 processed
 ```
 
@@ -361,9 +410,11 @@ processed
 
 Run the schema file in your Postgres database:
 
-```
+```text
 database/schema.sql
 ```
+
+For a brand-new setup, use the V4.0 schema. If you are upgrading from an older version and want to preserve data, use the migration script instead.
 
 ### Step 3 — Set Up HTTPS Tunnel
 
@@ -383,17 +434,20 @@ Connect or configure credentials for Gmail, Gemini, Telegram, and Postgres.
 
 ### Step 6 — Replace Placeholder IDs
 
-After importing, replace any placeholder IDs, URLs, credential references, and webhook paths required by your local setup.
+After importing Workflow B, copy its workflow ID. Then paste it into Workflow A's **Call Single Email Processor** node.
+
+Also replace any placeholder credential references, URLs, or webhook paths required by your local setup.
 
 ### Step 7 — Run Smoke Tests
 
 Before activating the workflows, run test cases for:
 
-- One normal email
+- One normal human email
 - One newsletter or promo email
 - One receipt/order email
+- One login or OTP email
 - One confusing email
-- One Telegram command
+- One Telegram rule command
 
 ### Step 8 — Activate Workflows
 
@@ -412,12 +466,16 @@ Before using this on your real inbox every day, test carefully:
 |---|---|
 | 1 | Send yourself a fake receipt email |
 | 2 | Send yourself a fake newsletter email |
-| 3 | Send yourself a fake urgent email |
-| 4 | Add a sender rule from Telegram |
-| 5 | Remove a sender rule from Telegram |
-| 6 | Confirm Gmail labels are applied correctly |
-| 7 | Confirm the `processed` label is added |
-| 8 | Confirm the Telegram summary is received |
+| 3 | Send yourself a fake urgent human email |
+| 4 | Send yourself a fake OTP or login-alert email |
+| 5 | Add a sender rule from Telegram |
+| 6 | Remove a sender rule from Telegram |
+| 7 | Confirm Gmail category labels are applied correctly |
+| 8 | Confirm the `processed` label is added |
+| 9 | Confirm the email is archived after processing |
+| 10 | Confirm the Telegram summary is received |
+| 11 | Run `/stats` and `/recent` |
+| 12 | Run `/explain sender@example.com` |
 
 If something looks wrong, deactivate the workflows and check the [Deployment Guide](docs/deployment-guide.md).
 
@@ -433,10 +491,11 @@ So it was rebuilt with a simpler philosophy:
 
 > Process emails simply.
 > Label safely.
+> Archive what is done.
 > If something fails, do not hide the email.
 > Let the user review anything uncertain.
 
-The current version keeps the important safety ideas while removing unnecessary complexity.
+The current V4.0 version keeps the important safety ideas while removing unnecessary complexity. It was refined through repeated audit and rebuttal rounds with multiple AI agents, with a strong focus on staying lean instead of adding dashboards, queues, or enterprise bloat.
 
 ---
 
@@ -456,9 +515,9 @@ The current version keeps the important safety ideas while removing unnecessary 
 |---|---|
 | **n8n** | Runs the automation workflows |
 | **Gmail API** | Reads and labels Gmail messages |
-| **Gemini** | Classifies emails when no personal rule exists |
-| **Telegram Bot** | Lets you manage rules from your phone |
-| **Postgres** | Stores rules and audit history |
+| **Gemini** | Classifies emails when no personal rule or safe shortcut exists |
+| **Telegram Bot** | Lets you manage rules and receive daily summaries from your phone |
+| **Postgres** | Stores rules, run history, and audit ledger entries |
 | **ngrok / HTTPS tunnel** | Lets Telegram reach a local self-hosted n8n instance |
 
 ---
@@ -467,11 +526,12 @@ The current version keeps the important safety ideas while removing unnecessary 
 
 | Metric | Value |
 |---|---|
-| Executable nodes | 54 |
+| Executable nodes | 60 |
 | Workflows | 3 |
-| Gmail labels | 6 |
-| Telegram commands | 16 |
+| Gmail labels | 7 |
+| Telegram commands | 20+ |
 | Database tables | 3 |
+| Performance indexes | 5 |
 | Software cost | $0 (free tier) |
 | Goal | Keep personal Gmail clean with minimal effort |
 
@@ -479,7 +539,7 @@ The current version keeps the important safety ideas while removing unnecessary 
 
 ## 🏗️ Project Structure
 
-```
+```text
 shiny-gmail-automation/
 ├── README.md
 ├── LICENSE
@@ -500,13 +560,29 @@ shiny-gmail-automation/
 
 ## 🗺️ Roadmap
 
-- [ ] Add a dry-run mode
+Potential future improvements:
+
+- [ ] Add `/run` for on-demand processing from Telegram
+- [ ] Add `/reclassify` or `/relabel` for manual correction loops
+- [ ] Add `/why` for exact message-level explanation
 - [ ] Add Docker Compose setup
 - [ ] Add workflow JSON validation
-- [ ] Add more Telegram rule types
-- [ ] Add better classification accuracy logging
 - [ ] Add optional weekly digest
 - [ ] Add multi-account support
+
+Already included in V4.0:
+
+- [x] Telegram rule management
+- [x] Sender and domain rules
+- [x] `/stats`
+- [x] `/recent`
+- [x] `/recent failed`
+- [x] `/recent warnings`
+- [x] `/explain`
+- [x] AI confidence handling
+- [x] Thread reuse
+- [x] Batch saturation warning
+- [x] Condensed no-work summaries
 
 ---
 
@@ -515,7 +591,7 @@ shiny-gmail-automation/
 <details>
 <summary><strong>Can this delete my emails?</strong></summary>
 
-No. The system is designed to label emails, not delete them.
+No. The system is designed to label and archive emails, not permanently delete them.
 </details>
 
 <details>
@@ -529,27 +605,30 @@ Yes. You can manually remove labels in Gmail like any normal Gmail label.
 
 Create a Telegram rule for that sender. Your rule will override AI next time.
 
-```
+```text
 /whitelist sender@example.com
+/blacklist sender@example.com
+/receipt sender@example.com
+/review sender@example.com
 ```
 </details>
 
 <details>
 <summary><strong>What if the system crashes?</strong></summary>
 
-Unprocessed emails stay in Gmail and can be retried later.
+Unprocessed emails stay in Gmail and can be retried later. Emails that already received the `processed` label are considered handled.
 </details>
 
 <details>
 <summary><strong>What if Gemini is unavailable?</strong></summary>
 
-The email is sent to `please-review` instead of being silently misclassified.
+The email is sent to `needs-review` instead of being silently misclassified.
 </details>
 
 <details>
 <summary><strong>Can I change the 6:00 AM schedule?</strong></summary>
 
-Yes. Change the schedule in Workflow A inside n8n.
+Yes. Change the schedule in Workflow A inside n8n. V4.0 is configured for `Asia/Manila` timezone by default.
 </details>
 
 <details>
@@ -568,6 +647,18 @@ Yes. If n8n runs locally on your laptop, it must be on and awake for the schedul
 <summary><strong>Why do I need ngrok?</strong></summary>
 
 Telegram requires HTTPS webhook URLs. Localhost URLs are not accepted. ngrok gives you a public HTTPS address that tunnels to your local n8n.
+</details>
+
+<details>
+<summary><strong>What happens when an email is archived?</strong></summary>
+
+Archiving removes the email from the inbox but does not delete it. You can still find it in Gmail search, All Mail, or by its category label.
+</details>
+
+<details>
+<summary><strong>Can I reprocess old emails?</strong></summary>
+
+Yes. Remove the `processed` label from those emails and move them back to the inbox. V4.0 only fetches emails matching `is:inbox -label:processed`.
 </details>
 
 <details>
